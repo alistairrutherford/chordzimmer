@@ -279,9 +279,13 @@ static void testScaleMapping()
         ok &= scaleForGuess (scale, false) == (f == ScaleFamily::Major ? scale : Scale::Major);
         ok &= scaleForGuess (scale, true) == (f == ScaleFamily::Minor ? scale : Scale::NaturalMinor);
     }
-    check (majors == 6 && minors == 6 && neither == 1 && scaleFamily (Scale::Locrian) == ScaleFamily::Neither
-               && scaleFamily (Scale::PhrygianDominant) == ScaleFamily::Major && scaleFamily (Scale::HungarianMinor) == ScaleFamily::Minor,
-           "6 major-family scales, 6 minor-family, Locrian neither");
+    // The 13 inherited scales: 6 major, 6 minor, Locrian neither. The Phase 1 modes (PLAN.md
+    // §3.2) add 3 major (Lydian #2, Lydian Dominant, Mixolydian b6), 2 minor (Dorian #4,
+    // Dorian b2) and 6 without a perfect 5th.
+    check (majors == 9 && minors == 8 && neither == 7 && scaleFamily (Scale::Locrian) == ScaleFamily::Neither
+               && scaleFamily (Scale::PhrygianDominant) == ScaleFamily::Major && scaleFamily (Scale::HungarianMinor) == ScaleFamily::Minor
+               && scaleFamily (Scale::DorianSharp4) == ScaleFamily::Minor && scaleFamily (Scale::Altered) == ScaleFamily::Neither,
+           "9 major-family scales, 8 minor-family, 7 neither (Locrian, the altered and augmented modes)");
     check (ok && scaleForGuess (Scale::Dorian, true) == Scale::Dorian && scaleForGuess (Scale::Dorian, false) == Scale::Major
                && scaleForGuess (Scale::Locrian, true) == Scale::NaturalMinor && scaleForGuess (Scale::Mixolydian, false) == Scale::Mixolydian,
            "a guess keeps a same-family Scale (D minor on Dorian stays Dorian), else Major or Natural Minor; Locrian is always replaced");

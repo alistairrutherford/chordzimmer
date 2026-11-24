@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: Phase 1, palette theory
+
+Core only (PLAN.md §6, Phase 1); the editor doesn't use it yet (Phase 4).
+
+- **Scale families** (PLAN.md §3.2): the 7 major modes, the 7 harmonic-minor modes and the 7
+  melodic-minor modes; Harmonic major, Hungarian minor and Double harmonic stay single-mode
+  families. Each scale knows its family, its mode number and its parallel modes.
+- **11 new scales**, appended after the 13 inherited ones (the Scale parameter saves the index, so
+  existing sets and presets are unchanged): Locrian Natural 6, Ionian #5, Dorian #4, Lydian #2,
+  Altered bb7, Dorian b2, Lydian Augmented, Lydian Dominant, Mixolydian b6, Locrian Natural 2,
+  Altered. The Scale menu now lists 24.
+- **Palette** (PLAN.md §3.1): `PaletteTiers.h` holds the 17 rows of the six complexity tiers as
+  data; `PaletteBuilder.h` builds the 7-column grid for a palette key and mode against a home
+  key and scale: notes, root, name, Roman numeral relative to home, colour family (from the 3rd
+  and 5th) and filled/hollow (every note in the home scale).
+- **Circle of fifths** (PLAN.md §3.2): `CircleOfFifths.h` steps the palette key a fifth either
+  way, reports the distance from home (±1 … ±6) and goes home.
+- Tests: `test_palette` (hand-written grids for C major, A minor, A harmonic minor and D Dorian),
+  `test_navigator`; the music21 fixture covers the new modes.
+
 ## 0.0.1 (2026-11-24): Phase 0, fork and identity
 
 Forked from ChordMonkey 1.1.0 (PLAN.md §6, Phase 0).

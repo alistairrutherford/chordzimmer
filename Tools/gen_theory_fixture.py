@@ -18,7 +18,7 @@ import os
 import sys
 
 import music21
-from music21 import pitch, scale
+from music21 import interval, pitch, scale
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "Tests", "fixtures", "theory_reference.json")
@@ -27,14 +27,50 @@ BASE_MIDI = 48                       # C of the chord output's default octave
 KEY_SPELLINGS = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"]
 
 
+class IntervalScale:
+    """A scale music21 has no class for, walked by its interval names. music21's ConcreteScale
+    loses its way on some spellings (a Bbb in mode 7 of harmonic minor comes back as a B# an
+    octave low), so this steps with music21's own interval arithmetic instead."""
+
+    def __init__(self, tonic, names):
+        self.names = names
+        self.pcs = [tonic.midi % 12]
+        p = tonic
+        for n in names[:-1]:
+            p = p.transpose(n)
+            self.pcs.append(p.midi % 12)
+        assert (p.transpose(names[-1]).midi - tonic.midi) == 12, ("intervals must add up to an octave", names)
+
+    def nextPitch(self, p, direction=None, stepSize=1):
+        q = p.transpose(self.names[self.pcs.index(p.midi % 12)])
+        q.simplifyEnharmonic(inPlace=True)   # keep the spelling from drifting into triple flats
+        return q
+
+
 def from_intervals(*names):
     """A scale music21 has no class for, from the interval names between its degrees."""
     def build(tonic):
-        pitches = [tonic]
-        for n in names:
-            pitches.append(pitches[-1].transpose(n))
-        return scale.ConcreteScale(pitches=pitches)
+        return IntervalScale(tonic, list(names))
     return build
+
+
+def parent_steps(parent_class):
+    """The interval names between the degrees of a music21 scale on C, walked upwards (the
+    melodic minor's ascending form), back up to the octave."""
+    sc = parent_class(pitch.Pitch("C4"))
+    p, names = pitch.Pitch("C4"), []
+    for _ in range(7):
+        q = sc.nextPitch(p, direction=scale.Direction.ASCENDING, stepSize=1)
+        names.append(interval.Interval(p, q).name)
+        p = q
+    return names
+
+
+def mode_of(parent_class, mode):
+    """Mode `mode` (1-7) of a music21 scale, as the parent's intervals rotated (PLAN.md §3.2):
+    an independent check that each mode in Scales.h is the rotation its family says it is."""
+    steps = parent_steps(parent_class)
+    return from_intervals(*(steps[mode - 1:] + steps[:mode - 1]))
 
 
 # Same names and order as Source/core/theory/Scales.h.
@@ -52,6 +88,18 @@ SCALES = [
     ("Phrygian Dominant", from_intervals("m2", "A2", "m2", "M2", "m2", "M2", "M2")),
     ("Hungarian Minor", from_intervals("M2", "m2", "A2", "m2", "m2", "A2", "m2")),
     ("Double Harmonic", from_intervals("m2", "A2", "m2", "M2", "m2", "A2", "m2")),
+    # Phase 1 (PLAN.md §3.2): the other modes of harmonic and melodic minor.
+    ("Locrian Natural 6", mode_of(scale.HarmonicMinorScale, 2)),
+    ("Ionian #5", mode_of(scale.HarmonicMinorScale, 3)),
+    ("Dorian #4", mode_of(scale.HarmonicMinorScale, 4)),
+    ("Lydian #2", mode_of(scale.HarmonicMinorScale, 6)),
+    ("Altered bb7", mode_of(scale.HarmonicMinorScale, 7)),
+    ("Dorian b2", mode_of(scale.MelodicMinorScale, 2)),
+    ("Lydian Augmented", mode_of(scale.MelodicMinorScale, 3)),
+    ("Lydian Dominant", mode_of(scale.MelodicMinorScale, 4)),
+    ("Mixolydian b6", mode_of(scale.MelodicMinorScale, 5)),
+    ("Locrian Natural 2", mode_of(scale.MelodicMinorScale, 6)),
+    ("Altered", mode_of(scale.MelodicMinorScale, 7)),
 ]
 
 # Each group as scale steps above the chord root (0 = root, 2 = third, 7 = root an octave up,

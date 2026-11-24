@@ -21,6 +21,9 @@
         <FILE id="csF022" name="RomanNumeral.h" compile="0" resource="0" file="Source/core/theory/RomanNumeral.h"/>
         <FILE id="csF062" name="VoiceLeading.h" compile="0" resource="0" file="Source/core/theory/VoiceLeading.h"/>
         <FILE id="cmF001" name="ChordTypes.h" compile="0" resource="0" file="Source/core/theory/ChordTypes.h"/>
+        <FILE id="czF101" name="PaletteTiers.h" compile="0" resource="0" file="Source/core/theory/PaletteTiers.h"/>
+        <FILE id="czF102" name="PaletteBuilder.h" compile="0" resource="0" file="Source/core/theory/PaletteBuilder.h"/>
+        <FILE id="czF103" name="CircleOfFifths.h" compile="0" resource="0" file="Source/core/theory/CircleOfFifths.h"/>
       </GROUP>
       <GROUP id="csGrp1" name="core/engine">
         <FILE id="ccF101" name="ChordEngine.h" compile="0" resource="0" file="Source/core/engine/ChordEngine.h"/>
