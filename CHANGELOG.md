@@ -11,7 +11,9 @@ Engine and processor only (PLAN.md §6, Phase 3); the timeline UI is Phase 4.
     loop region repeats (before the start bar too), without it the progression plays once.
     Host loops, locates and tempo changes land where the timeline would be.
   - **Sync mode → Preview** runs on its own clock at Live's tempo, with Live stopped too: loops
-    the region, or plays once and stops; Play off pauses, ⏮ (`rewind`) goes back.
+    the region, or plays once and stops; Play off pauses, ⏮ (`rewind`) goes back. With Live
+    stopped, the instrument track hears it when armed or set to Monitor In (checked in Live
+    12.4.16).
   - The **loop region** is the selection (chords or sections), else everything.
   - Every chord change is restruck on its beat; an edit to the sounding chord retunes it; an
     edit that moves the chord lines restrikes; all notes end on stop, Play off, Enable off and
