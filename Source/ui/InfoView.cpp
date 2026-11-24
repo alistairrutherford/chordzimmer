@@ -33,6 +33,8 @@ namespace chordzimmer::ui
             { "display.now", "Now", "The chord playing (or the one selected), its numeral in the home key, and the bar and beat." },
 
             // ---- The timeline ----------------------------------------------------------------
+            { "ui.dragSelection", "Drag MIDI",
+              "Drag into a track: the selected chords or sections (nothing selected: all) as a MIDI clip, section names as markers. Alt: no strum." },
             { "display.timeline", "Timeline",
               "Sections of chords. Drag a chord or tab to move it (Alt: copy), its edge to resize; Shift-click selects more; right-click for more." },
 

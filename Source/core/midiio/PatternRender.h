@@ -5,13 +5,20 @@
 // strum and velocity included. With `chordsOnly`, Strum is left out: each chord starts together
 // and is held for its length.
 //
-// renderPattern (the workspace's drag-out, until Phase 4 replaces the workspace) renders one
-// pattern as a one-section progression (progressionFromPattern).
+// renderSelection (PLAN.md §3.7, Phase 7: the timeline's drag-out) renders what is selected: the
+// chords and sections of the selection, back to back in progression order (copy's parts), or
+// the whole progression with nothing selected; each section's name is a marker at its start,
+// and the clip is named after its sections and the key (exportName: "Verse-Chorus_C"), or after
+// its chord when it is one chord ("Dm7_C").
+//
+// renderPattern renders one workspace pattern as a one-section progression
+// (progressionFromPattern); since Phase 4 only the tests use it.
 //
 // Plain C++, no JUCE. Allocates (the engine is large): for the message thread.
 #pragma once
 
 #include "../engine/ChordEngine.h"
+#include "../model/TimelineLayout.h"
 #include "MidiFile.h"
 #include <memory>
 #include <vector>
@@ -107,6 +114,62 @@ namespace chordzimmer
             return a.start != b.start ? a.start < b.start : a.pitch < b.pitch;
         });
         song.notes = std::move (kept);
+        return song;
+    }
+
+    //==========================================================================
+    // The drag-out of a selection (PLAN.md §3.7).
+
+    // The progression a drag-out holds: the selection's parts as sections, or all of `p`.
+    inline ChordProgression exportProgression (const ChordProgression& p, const Selection& sel)
+    {
+        const Selection n = p.normalised (sel);
+        if (n.empty())
+            return p;
+        ChordProgression out;
+        out.sections = p.copy (n).parts;
+        return out;
+    }
+
+    // "Verse-Chorus_C", "Intro-Verse-Chorus-Bridge+2_Am", "Dm7_C": the sections in order (a name
+    // repeated back to back once; at most four, then how many more), or the chord when there is
+    // just one, then the key (with "m" for a scale with a minor 3rd). No '/' (a slash chord's
+    // bass follows "over").
+    inline std::string exportName (const ChordProgression& clip, int key, Scale scale)
+    {
+        std::string base;
+        if (clip.numChords() == 1)
+            base = timelineChordLabel (clip.sections[0].chords[0], key, scale).name;
+        else
+        {
+            std::vector<std::string> names;
+            for (const auto& s : clip.sections)
+                if (names.empty() || names.back() != s.name)
+                    names.push_back (s.name);
+            for (size_t i = 0; i < names.size() && i < 4; ++i)
+                base += (i ? "-" : "") + names[i];
+            if (names.size() > 4)
+                base += "+" + std::to_string (names.size() - 4);
+        }
+        if (base.empty())
+            base = "ChordZimmer";
+        std::string clean;
+        for (char c : base)
+            clean += c == '/' ? std::string (" over ") : std::string (1, c);
+        const int k = ((key % 12) + 12) % 12;
+        const bool minor = scaleInfo (scale).semitones[2] == 3;
+        return clean + "_" + makeSpelling (k, scale).name (k) + (minor ? "m" : "");
+    }
+
+    inline MidiSong renderSelection (const ChordProgression& p, const Selection& sel, const EngineSettings& s, double bpm, int numerator = 4,
+                                     int denominator = 4, bool chordsOnly = false, double sampleRate = 48000.0, int ppq = 960)
+    {
+        const ChordProgression clip = exportProgression (p, sel);
+        MidiSong song = renderProgression (clip, s, bpm, numerator, denominator, chordsOnly, sampleRate, ppq);
+        for (int i = 0; i < clip.numSections(); ++i)
+            song.markers.push_back ({ (int64_t) clip.sectionStart (i) * ppq / ticksPerBeat, clip.sections[(size_t) i].name });
+        if (! clip.empty())
+            song.name = exportName (clip, s.key, s.scale);
         return song;
     }
 

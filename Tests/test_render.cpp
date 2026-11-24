@@ -180,9 +180,158 @@ static void testMatchesTheHost()
            "the name is in both tracks: the tempo track and the notes track");
 }
 
+//==============================================================================
+// Phase 7: the selection's drag-out (PLAN.md §3.7, G8).
+
+namespace
+{
+    ProgressionSection sectionOf (const char* name, const char* numerals, int key = 0)
+    {
+        auto p = progressionFromPattern (progression (numerals, key), name);
+        return p.sections[0];
+    }
+
+    // Verse I V vi IV · Chorus IV:2 V:2 I:4 · Bridge ii7:3 V7:1 (16 + 8 + 4 = 28 beats)
+    ChordProgression song3()
+    {
+        ChordProgression p;
+        p.sections = { sectionOf ("Verse", "I V vi IV"), sectionOf ("Chorus", "IV:2 V:2 I:4"), sectionOf ("Bridge", "ii7:3 V7:1") };
+        return p;
+    }
+
+    // What a host records over one pass of the loop region (the selection) in Sync with Loop,
+    // from song position 0 (where the region starts).
+    MidiSong hostedSelection (const ChordProgression& p, const Selection& sel, EngineSettings s, double bpm, double rate, int block)
+    {
+        Host h (rate, bpm);
+        h.engine->setTimeline (makeTimeline (p, sel));
+        s.play = true;
+        s.loop = true;
+        h.settings = s;
+        const double beats = p.range (sel).length() / (double) ticksPerBeat;
+        h.run (h.at (beats), block);
+        h.stop (block);
+        MidiSong song;
+        std::vector<std::vector<size_t>> open (128);
+        const int64_t last = (int64_t) std::llround (beats * 960);
+        for (const auto& hit : h.hits)
+        {
+            const auto tick = (int64_t) std::llround ((double) hit.sample / h.spq() * 960);
+            if (hit.on && tick >= last)
+                continue;
+            if (hit.on)
+            {
+                open[(size_t) hit.note].push_back (song.notes.size());
+                song.notes.push_back ({ tick, -1, (uint8_t) hit.note, (uint8_t) hit.velocity, 0 });
+            }
+            else if (! open[(size_t) hit.note].empty())
+            {
+                song.notes[open[(size_t) hit.note].front()].end = std::min (tick, last);
+                open[(size_t) hit.note].erase (open[(size_t) hit.note].begin());
+            }
+        }
+        std::stable_sort (song.notes.begin(), song.notes.end(), [] (const MidiNote& a, const MidiNote& b)
+        {
+            return a.start != b.start ? a.start < b.start : a.pitch < b.pitch;
+        });
+        return song;
+    }
+
+    std::string sectionsOf (const ChordProgression& p)
+    {
+        std::string out;
+        for (const auto& sec : p.sections)
+            out += (out.empty() ? "" : " ") + sec.name + ":" + std::to_string (sec.chords.size());
+        return out;
+    }
+}
+
+static void testSelectionExport()
+{
+    std::cout << "== the selection's drag-out ==\n";
+    const auto p = song3();
+    Selection two;
+    two.chords = { { 0, 3 }, { 2, 0 } };
+    Selection mixed;
+    mixed.sections = { 1 };
+    mixed.chords = { { 0, 0 } };
+    check (exportProgression (p, {}) == p && sectionsOf (exportProgression (p, Selection::section (1))) == "Chorus:3",
+           "nothing selected: everything; the Chorus selected: the Chorus");
+    check (sectionsOf (exportProgression (p, two)) == "Verse:1 Bridge:1" && sectionsOf (exportProgression (p, mixed)) == "Verse:1 Chorus:3",
+           "chords from two sections: a part each, in order; a chord and a section: both");
+    check (exportProgression (p, Selection::chord (7, 0)) == p, "a selection of nothing that exists: everything");
+
+    EngineSettings s;
+    check (exportName (p, 0, Scale::Major) == "Verse-Chorus-Bridge_C", "the name: the sections and the key (" + exportName (p, 0, Scale::Major) + ")");
+    check (exportName (exportProgression (p, Selection::chord (2, 0)), 0, Scale::Major) == "Dm7_C", "one chord: the chord's name (Dm7_C)");
+    check (exportName (exportProgression (p, Selection::chord (2, 0)), 9, Scale::NaturalMinor) == "Dm7_Am", "in A minor: _Am");
+    ChordProgression many;
+    for (const char* n : { "Intro", "Verse", "Verse", "Chorus", "Bridge", "Chorus", "Outro" })
+        many.sections.push_back (sectionOf (n, "I"));
+    check (exportName (many, 7, Scale::Major) == "Intro-Verse-Chorus-Bridge+2_G", "a name repeated back to back once; at most four, then how many more (" + exportName (many, 7, Scale::Major) + ")");
+    auto slash = p;
+    slash.sections[0].chords[0].inversion = 1;
+    check (exportName (exportProgression (slash, Selection::chord (0, 0)), 0, Scale::Major) == "C over E_C", "a slash chord: no '/' in the name (C over E_C)");
+
+    // Markers at each section's start, through the file and back.
+    const auto song = renderSelection (p, {}, s, 120.0);
+    const std::vector<MidiMarker> want { { 0, "Verse" }, { 16 * 960, "Chorus" }, { 24 * 960, "Bridge" } };
+    check (song.markers == want && song.name == "Verse-Chorus-Bridge_C", "everything: markers Verse at 0, Chorus at beat 16, Bridge at 24; named after them");
+    const auto bytes = writeMidiFile (song);
+    MidiSong back;
+    std::string error, why;
+    check (readMidiFile (bytes.data(), bytes.size(), back, error) && back.markers == want && back.name == song.name && same (song, back, 0, why),
+           "the .mid reads back with its markers, name and notes");
+    const auto chorus = renderSelection (p, Selection::section (1), s, 120.0);
+    check (chorus.markers == std::vector<MidiMarker> { { 0, "Chorus" } } && ! chorus.notes.empty() && chorus.notes.back().end == 8 * 960,
+           "the Chorus alone: one marker at 0, 8 beats long");
+    check (renderSelection ({}, {}, s, 120.0).notes.empty() && renderSelection ({}, {}, s, 120.0).markers.empty(), "an empty progression renders nothing");
+
+    // G8: a selection's export is what plays when it's the loop region (Sync, Loop), to the tick.
+    struct Case { const char* what; Selection sel; EngineSettings s; double bpm; };
+    std::vector<Case> cases;
+    {
+        EngineSettings e;
+        e.fx.bass = BassMode::RootFifth;
+        cases.push_back ({ "the Chorus, Root + 5th", Selection::section (1), e, 120.0 });
+    }
+    {
+        EngineSettings e;
+        e.fx.strum = StrumMode::Down;
+        e.fx.strumRate = 4;
+        e.fx.voicing = VoicingMode::Spread;
+        cases.push_back ({ "Verse's vi and IV, strummed, Spread", [] { Selection x; x.chords = { { 0, 2 }, { 0, 3 } }; return x; }(), e, 97.0 });
+    }
+    {
+        EngineSettings e;
+        e.fx.voiceLeading = VoiceLeadingMode::Smooth;
+        cases.push_back ({ "everything, smooth voice leading", Selection {}, e, 140.0 });
+    }
+    {
+        EngineSettings e;
+        e.fx.velocity.curve = VelocityCurve::House;
+        cases.push_back ({ "Chorus and Bridge, House velocity", [] { Selection x; x.sections = { 1, 2 }; return x; }(), e, 120.0 });
+    }
+    for (const auto& c : cases)
+    {
+        const auto rendered = renderSelection (p, c.sel, c.s, c.bpm);
+        bool all = true;
+        for (double rate : { 44100.0, 48000.0 })
+            for (int block : { 64, 512 })
+                if (! same (rendered, hostedSelection (p, c.sel, c.s, c.bpm, rate, block), 1, why))
+                {
+                    all = false;
+                    break;
+                }
+        check (all && ! rendered.notes.empty(), std::string (c.what) + ": " + std::to_string (rendered.notes.size())
+                                                    + " notes, the same as a host records with it as the loop region" + (all ? "" : " (" + why + ")"));
+    }
+}
+
 int main()
 {
     testChordsOnly();
     testMatchesTheHost();
+    testSelectionExport();
     return testutil::finish ("test_render");
 }

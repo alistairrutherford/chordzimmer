@@ -34,7 +34,9 @@
 //  10. Match       (Phase 5) Listen through processBlock (the input passes through, no
 //                  allocation), the matches and the palette's rank badges, the note picker,
 //                  ±2 fifths, Chord from notes' Add and Set, Clear, one popover at a time,
-//                  Listen not saved; the editor-match snapshot
+//                  Listen restored with the state; the editor-match snapshot
+//  11. Drag MIDI   (Phase 7) the timeline's drag-out: everything or the selection, named after it,
+//                  the render (Bass included) with section markers, Alt for chords only
 //
 //   ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -874,16 +876,80 @@ static void testMatch (const juce::File& fixtures, const juce::File& out, bool u
     editor->refreshNow();
     check (match.noteSet().empty() && match.getMatches().empty() && ! palette.matchShown(), "Clear: no notes, no matches, the palette unfaded");
 
-    // Listen isn't saved (like Analyse).
+    // Listen is saved with the state (a restore sets it back, as pluginval checks), not in presets.
     juce::MemoryBlock state;
     p->getStateInformation (state);
     auto restored = std::make_unique<ChordZimmerProcessor>();
+    set (*restored, params::listen, 0.0f);
     restored->setStateInformation (state.getData(), (int) state.getSize());
-    check (get (*p, params::listen) > 0.5f && get (*restored, params::listen) < 0.5f && ! params::isPresetParameter (params::listen),
-           "Listen isn't saved with the state, nor in presets");
+    auto other = std::make_unique<ChordZimmerProcessor>();
+    set (*p, params::listen, 0.0f);
+    juce::MemoryBlock off;
+    p->getStateInformation (off);
+    set (*other, params::listen, 1.0f);
+    other->setStateInformation (off.getData(), (int) off.getSize());
+    check (get (*restored, params::listen) > 0.5f && get (*other, params::listen) < 0.5f && ! params::isPresetParameter (params::listen),
+           "Listen restores with the state, on or off; it isn't in presets");
     set (*p, params::listen, 0.0f);
     editor->showMatch (false);
     check (! palette.matchShown(), "closing Match unfades the palette");
+    closeEditor (*p, editor);
+}
+
+//==============================================================================
+// 11: the selection's drag-out (Phase 7, PLAN.md §3.7).
+
+static void testDragOut()
+{
+    std::cout << "== Drag MIDI ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->refreshNow();
+    auto& t = editor->getTimeline();
+    auto& handle = t.dragHandle;
+    juce::String error;
+    check (! handle.writeFile (false, error).existsAsFile() && error.isNotEmpty(), "an empty timeline: nothing to drag (" + error + ")");
+
+    p->setProgression (song());
+    set (*p, params::bass, (float) (int) BassMode::Root);
+    editor->refreshNow();
+    check (handle.getLabel() == "Drag MIDI: all, 12 bars", "nothing selected: all of it (" + handle.getLabel() + ")");
+    const auto readBack = [] (const juce::File& f, MidiSong& song)
+    {
+        juce::MemoryBlock data;
+        std::string why;
+        return f.loadFileAsData (data) && readMidiFile ((const uint8_t*) data.getData(), data.getSize(), song, why);
+    };
+    MidiSong all;
+    const auto allFile = handle.writeFile (false, error);
+    const auto expected = renderSelection (p->getProgression(), {}, p->currentSettings(), 120.0);
+    check (allFile.getFileName() == "Verse-Chorus-Bridge_C.mid" && readBack (allFile, all) && all.notes.size() == expected.notes.size()
+               && all.markers == expected.markers && all.markers.size() == 3 && all.name == "Verse-Chorus-Bridge_C",
+           "it writes Verse-Chorus-Bridge_C.mid: the render, with Bass, and three markers (" + juce::String ((int) all.notes.size()) + " notes)");
+
+    t.setSelection (Selection::section (1));
+    editor->refreshNow();
+    MidiSong chorus;
+    const auto chorusFile = handle.writeFile (false, error);
+    const auto chorusExpected = renderSelection (p->getProgression(), Selection::section (1), p->currentSettings(), 120.0);
+    bool same = readBack (chorusFile, chorus) && chorus.notes.size() == chorusExpected.notes.size();
+    for (size_t i = 0; same && i < chorus.notes.size(); ++i)
+        same = chorus.notes[i].start == chorusExpected.notes[i].start && chorus.notes[i].end == chorusExpected.notes[i].end
+            && chorus.notes[i].pitch == chorusExpected.notes[i].pitch;
+    check (handle.getLabel() == "Drag MIDI: Chorus, 4 bars" && chorusFile.getFileName() == "Chorus_C.mid" && same
+               && chorus.markers == std::vector<MidiMarker> { { 0, "Chorus" } },
+           "the Chorus selected: Chorus_C.mid, its notes exactly, one marker (" + handle.getLabel() + ")");
+    t.setSelection (Selection::chord (2, 1));
+    editor->refreshNow();
+    check (handle.getLabel().startsWith ("Drag MIDI: Bb") && handle.writeFile (true, error).getFileName() == "Bb_C chords.mid",
+           "one chord: named after it; with Alt, \"chords\" (" + handle.getLabel() + ")");
+    const auto at = editor->getLocalPoint (&handle, handle.getLocalBounds().getCentre());
+    editor->showInfoAt (at);
+    check (editor->infoView().shownKey() == "ui.dragSelection" && editor->infoView().shownText().startsWith ("Drag into a track: the selection (Bb)"),
+           "pointing at it says what it holds (" + editor->infoView().shownText().substring (0, 40) + ")");
     closeEditor (*p, editor);
 }
 
@@ -909,6 +975,7 @@ int main (int argc, char** argv)
     testDetect();
     testRealTime();
     testMatch (fixtures, out, update);
+    testDragOut();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;

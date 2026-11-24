@@ -15,6 +15,10 @@
 //               and the palette's double-click go to it); a palette chord dropped there makes a
 //               new section
 //
+// Drag MIDI (PLAN.md §3.7, Phase 7), at the right of the title row: drag it into a track (or the
+// Finder) for the selection as a MIDI clip, everything when nothing is selected, with section
+// names as markers; Alt for the chords without strum.
+//
 // Keys (the editor passes them on, PLAN.md §5): Delete, Cmd-C / X / V (at the marker), Cmd-D
 // (duplicate in place), ← →, Cmd +/- (zoom). The wheel scrolls; Alt+Shift+wheel zooms. The
 // selection is the loop region (ChordZimmerProcessor::setLoopSelection).
@@ -26,6 +30,30 @@
 
 namespace chordzimmer::ui
 {
+    // The selection's drag-out (ChordZimmerProcessor::writeSelectionExport).
+    class SelectionDragHandle : public juce::Component,
+                                public juce::SettableTooltipClient
+    {
+    public:
+        explicit SelectionDragHandle (ChordZimmerProcessor&);
+
+        // What it holds now (the timeline's selection, or everything).
+        void update (const ChordProgression&, const Selection&, int key, Scale, int beatsPerBar);
+        const juce::String& getLabel() const noexcept { return label; }
+        juce::File writeFile (bool chordsOnly, juce::String& error);   // what a drag carries
+
+        void paint (juce::Graphics&) override;
+        void mouseDown (const juce::MouseEvent&) override;
+        void mouseDrag (const juce::MouseEvent&) override;
+        void mouseUp (const juce::MouseEvent&) override;
+
+    private:
+        ChordZimmerProcessor& processor;
+        Selection selection;
+        juce::String label;
+        bool enabled = false, dragging = false;
+    };
+
     class TimelinePanel : public juce::Component,
                           public juce::DragAndDropTarget,
                           public juce::SettableTooltipClient,
@@ -38,7 +66,8 @@ namespace chordzimmer::ui
         // From the editor's timer: the progression (only when it changed), the playhead, the
         // home key for the labels.
         void refresh (const UiModel&);
-        static int preferredHeight() { return 128; }
+        static int preferredHeight() { return 132; }
+        SelectionDragHandle dragHandle;
 
         // The prefix of a drag description that carries a chord (the palette's drags):
         // "czchord:" + the saved text of a one-chord progression (Progression.h).
@@ -161,6 +190,7 @@ namespace chordzimmer::ui
         juce::TextEditor nameEditor;
         int renaming = -1;
 
-        static constexpr int padding = 10, titleHeight = 18, rulerHeight = 14, tabHeight = 20, scrollHeight = 8;
+        static constexpr int padding = 10, titleHeight = 22, rulerHeight = 14, tabHeight = 20, scrollHeight = 8;
+        static constexpr int dragHandleWidth = 200;
     };
 }

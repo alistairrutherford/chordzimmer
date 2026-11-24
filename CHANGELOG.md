@@ -1,12 +1,31 @@
 # Changelog
 
+## Unreleased: Phase 7, the selection's drag-out
+
+PLAN.md §6, Phase 7; §3.7.
+
+- **Drag MIDI** (the timeline's title row): drag it into a track, or the Finder, for a MIDI clip
+  of the selection: the chords and sections selected, back to back in order, or the whole
+  progression when nothing is selected. It plays the chords as ChordZimmer would (voicing, bass,
+  strum, velocity), at the host's tempo and meter; hold Alt for the chords without strum. The
+  file is named after its sections and the key (`Verse-Chorus_C.mid`; one chord: `Dm7_C.mid`),
+  and the section names are MIDI markers at their starts. The handle says what it holds.
+- **Changed:** **Listen** is now saved with the state (still not in presets): leaving it out made a
+  restore keep whatever value it had, which pluginval's state test caught.
+- **Removed:** the workspace pattern's drag-out from the processor (it has had no control since
+  Phase 4).
+- MIDI files: markers are written (and read back).
+- Tests: `test_render` checks what a drag-out holds, its name, the markers through the file, and
+  that a selection's export is what a host records with it as the loop region; the snapshot
+  test drags out the whole progression and a selection.
+
 ## Unreleased: Phase 5, Match and Chord-from-notes
 
 PLAN.md §6, Phase 5; §3.4.
 
 - **Match** (the footer's Match button): a popover over the transport and timeline, so the
   palette stays in view.
-  - **Listen** (a new parameter, appended; not saved, not in presets): notes played in, from the
+  - **Listen** (a new parameter, appended; not in presets): notes played in, from the
     keys or a clip, pass through and are kept with their lengths. *Last* picks how much counts
     (1–16 bars of playing; a silence afterwards doesn't push it away). *Use heard* copies them to
     the picker, *Clear* forgets them.

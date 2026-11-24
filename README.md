@@ -13,15 +13,15 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
 
-**Status:** Phases 0–5 of 9 are done: the fork, the new identity and the **Night Studio** look
-(PLAN.md §5.1); the palette theory; the progression model; timeline playback (Play follows Live
-from a start bar, or previews on its own clock); the editor: the **palette** (click to hear,
+**Status:** Phases 0–5 and 7 of 9 are done: the fork, the new identity and the **Night Studio**
+look (PLAN.md §5.1); the palette theory; the progression model; timeline playback (Play follows
+Live from a start bar, or previews on its own clock); the editor: the **palette** (click to hear,
 drag or double-click onto the timeline), the **key navigator** (◀ ▶ around the circle of fifths,
 the parallel modes, ⌂ Home), the **timeline** (sections of chords: drag to move, Alt-drag to
-copy, drag an edge to resize, snap, undo), the transport and a performance popover; and
-**Match**: play a phrase in (Listen) or pick notes, and see the palette chords that fit them
-ranked on the palette, or turn the notes into a chord of their own. Chord Relations (Phase 6)
-and the selection's drag-out (Phase 7) are next.
+copy, drag an edge to resize, snap, undo), the transport and a performance popover; **Match**
+(play a phrase in, or pick notes, and see the palette chords that fit them, or turn the notes
+into a chord); and **Drag MIDI**, the selection (or everything) as a clip with section markers.
+Chord Relations (Phase 6) and hardening (Phase 8) are next.
 
 ## Build, test, install
 

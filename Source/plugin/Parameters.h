@@ -82,8 +82,9 @@ namespace chordzimmer::params
     inline constexpr const char* startBar      = "startBar";
 
     // Match (appended; PLAN.md §3.4, §3.8, Phase 5): Listen collects the notes played in (the
-    // input passes through, no chords) for Match and Chord-from-notes. Not in presets, not saved,
-    // like Analyse.
+    // input passes through, no chords) for Match and Chord-from-notes. Not in presets; saved with
+    // the state like Play (Phase 7: leaving it out, as Analyse is, broke pluginval's state
+    // restoration, since a restore then kept whatever value Listen had).
     inline constexpr const char* listen        = "listen";
 
     constexpr int numParameters = 27;

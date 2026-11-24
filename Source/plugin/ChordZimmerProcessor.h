@@ -186,11 +186,14 @@ namespace chordzimmer
         TakeInfo exportInfo() const noexcept { return recorder.info(); }
         juce::File writeExport (juce::String& error);
 
-        // A pattern's drag-out (Phase 6, PatternRender.h): one loop of pattern `pattern` rendered
-        // with the current settings at the host's last tempo and meter (120 BPM, 4/4 before it
-        // has played), as a temporary .mid; `chordsOnly` leaves the rhythm out. An invalid File
-        // (and `error`) for an empty pattern.
-        juce::File writePatternExport (int pattern, bool chordsOnly, juce::String& error);
+        // The timeline's drag-out (PLAN.md §3.7, Phase 7; PatternRender.h's renderSelection): the
+        // selection's chords and sections (everything when nothing is selected) rendered with
+        // the current settings at the host's last tempo and meter (120 BPM, 4/4 before it has
+        // played), with section names as markers, as a temporary .mid named after them and the
+        // key ("Verse-Chorus_C.mid"); `chordsOnly` leaves the strum out. An invalid File (and
+        // `error`) for an empty progression. (ChordMonkey's pattern drag-out went with the
+        // workspace panel in Phase 4.)
+        juce::File writeSelectionExport (const Selection&, bool chordsOnly, juce::String& error);
 
         // While the Test pattern is on, each finished take is also written here (for checks in
         // Live through the bridge).

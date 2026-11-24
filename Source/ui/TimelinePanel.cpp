@@ -16,8 +16,104 @@ namespace chordzimmer::ui
         }
     }
 
-    TimelinePanel::TimelinePanel (ChordZimmerProcessor& p, Bindings& b) : processor (p), bindings (b)
+    //==========================================================================
+    SelectionDragHandle::SelectionDragHandle (ChordZimmerProcessor& p) : processor (p)
     {
+        setComponentID ("ui.dragSelection");
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    }
+
+    void SelectionDragHandle::update (const ChordProgression& prog, const Selection& sel, int key, Scale scale, int beatsPerBar)
+    {
+        const auto clip = exportProgression (prog, sel);
+        selection = prog.normalised (sel);
+        juce::String text, tip;
+        if (clip.empty())
+        {
+            text = "Drag MIDI";
+            tip = "Drag MIDI: put chords on the timeline first";
+        }
+        else
+        {
+            const auto what = juce::String::fromUTF8 (exportName (clip, key, scale).c_str()).upToLastOccurrenceOf ("_", false, false);
+            text = "Drag MIDI: " + (selection.empty() ? juce::String ("all") : what) + ", " + lengthText (clip.totalTicks(), beatsPerBar);
+            tip = "Drag into a track: " + (selection.empty() ? juce::String ("the whole progression") : "the selection (" + what + ")") + ", "
+                + lengthText (clip.totalTicks(), beatsPerBar) + ", as a MIDI clip with the section names as markers. Alt: no strum.";
+        }
+        enabled = ! clip.empty();
+        if (text != label)
+        {
+            label = text;
+            repaint();
+        }
+        setTooltip (tip);
+    }
+
+    juce::File SelectionDragHandle::writeFile (bool chordsOnly, juce::String& error)
+    {
+        return processor.writeSelectionExport (selection, chordsOnly, error);
+    }
+
+    void SelectionDragHandle::paint (juce::Graphics& g)
+    {
+        auto r = getLocalBounds().toFloat().reduced (0.5f);
+        const float radius = r.getHeight() * 0.5f;
+        if (enabled)
+        {
+            juce::Path p;
+            p.addRoundedRectangle (r, radius);
+            drawGlow (g, p, night::accent, dragging ? night::glowHover : 0.15f, 6);
+        }
+        g.setColour (enabled ? night::accent.withAlpha (0.14f) : colours::panel);
+        g.fillRoundedRectangle (r, radius);
+        g.setColour (enabled ? colours::chord : colours::outline);
+        g.drawRoundedRectangle (r, radius, dragging ? 2.0f : 1.0f);
+        auto grip = r.removeFromLeft (16.0f).reduced (5.0f, 5.0f).withTrimmedLeft (2.0f);
+        g.setColour (enabled ? colours::chord : colours::faint);
+        for (int row = 0; row < 3; ++row)
+            for (int col = 0; col < 2; ++col)
+                g.fillEllipse (grip.getX() + (float) col * 3.5f, grip.getY() + (float) row * grip.getHeight() / 2.6f, 2.0f, 2.0f);
+        g.setFont (font (11.0f, true));
+        g.setColour (enabled ? colours::text : colours::faint);
+        g.drawFittedText (label, r.toNearestInt().withTrimmedRight (8), juce::Justification::centredLeft, 1, 0.7f);
+    }
+
+    void SelectionDragHandle::mouseDown (const juce::MouseEvent&) { dragging = false; }
+
+    void SelectionDragHandle::mouseDrag (const juce::MouseEvent& e)
+    {
+        if (dragging || ! enabled || e.getDistanceFromDragStart() < 4)
+            return;
+        juce::String error;
+        const auto file = writeFile (e.mods.isAltDown(), error);
+        if (! file.existsAsFile())
+        {
+            setTooltip (error);
+            return;
+        }
+        dragging = true;
+        repaint();
+        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this,
+                                                                    [safe = juce::Component::SafePointer<SelectionDragHandle> (this)]
+        {
+            if (safe != nullptr)
+            {
+                safe->dragging = false;
+                safe->repaint();
+            }
+        });
+    }
+
+    void SelectionDragHandle::mouseUp (const juce::MouseEvent&)
+    {
+        dragging = false;
+        repaint();
+    }
+
+    //==========================================================================
+    TimelinePanel::TimelinePanel (ChordZimmerProcessor& p, Bindings& b) : dragHandle (p), processor (p), bindings (b)
+    {
+        addAndMakeVisible (dragHandle);
         setComponentID ("display.timeline");
         setWantsKeyboardFocus (true);
         scrollBar.setAutoHide (true);
@@ -91,6 +187,7 @@ namespace chordzimmer::ui
             followPlayhead();
             dirty = true;
         }
+        dragHandle.update (model, selected, homeKey, homeScale, beatsPerBar);
         if (dirty)
             repaint();
     }
@@ -414,6 +511,7 @@ namespace chordzimmer::ui
     {
         const auto r = getLocalBounds().reduced (padding);
         scrollBar.setBounds (r.withTop (r.getBottom() - scrollHeight));
+        dragHandle.setBounds (r.withHeight (titleHeight).removeFromRight (dragHandleWidth).reduced (0, 1).translated (0, -2));
         updateScrollBar();
         if (renaming >= 0)
             startRenaming (renaming);
@@ -438,7 +536,7 @@ namespace chordzimmer::ui
             g.setFont (font (11.0f));
             g.drawText (juce::String (prog.numSections()) + (prog.numSections() == 1 ? " section, " : " sections, ") + juce::String (prog.numChords())
                             + (prog.numChords() == 1 ? " chord, " : " chords, ") + lengthText (prog.totalTicks(), beatsPerBar),
-                        getLocalBounds().reduced (padding).removeFromTop (titleHeight).withTrimmedRight (4), juce::Justification::centredRight);
+                        getLocalBounds().reduced (padding).removeFromTop (titleHeight).withTrimmedRight (dragHandleWidth + 10), juce::Justification::centredRight);
         }
 
         const auto ruler = rulerArea(), tabs = tabArea(), chords = chordArea();

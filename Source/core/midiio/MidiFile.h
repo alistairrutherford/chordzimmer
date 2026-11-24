@@ -5,9 +5,11 @@
 //   readMidiFile   type 0 or 1, ticks per quarter note (SMPTE time isn't supported); every
 //                  track's notes, paired on (channel, pitch) in order, with running status,
 //                  note-on velocity 0 as a note-off, and the first tempo and time signature
-//   writeMidiFile  type 1, `ppq` ticks per quarter (Export: 960): track 1 has the name, tempo
-//                  and time signature, track 2 the name again (Live names a dropped clip after
-//                  it) and the notes (at one tick, note-offs first)
+//   writeMidiFile  type 1, `ppq` ticks per quarter (Export: 960): track 1 has the name, tempo,
+//                  time signature and the markers (PLAN.md §3.7: section names), track 2 the name
+//                  again (Live names a dropped clip after it) and the notes (at one tick,
+//                  note-offs first)
+//   readMidiFile   also reads the markers back (for the tests)
 #pragma once
 
 #include <algorithm>
@@ -25,6 +27,14 @@ namespace chordzimmer
         uint8_t pitch = 60, velocity = 100, channel = 0;
     };
 
+    struct MidiMarker
+    {
+        int64_t tick = 0;
+        std::string text;
+
+        bool operator== (const MidiMarker& o) const { return tick == o.tick && text == o.text; }
+    };
+
     struct MidiSong
     {
         int ppq = 960;                    // ticks per quarter note
@@ -32,6 +42,7 @@ namespace chordzimmer
         int numerator = 4, denominator = 4;
         std::string name;
         std::vector<MidiNote> notes;      // sorted by start, then pitch
+        std::vector<MidiMarker> markers;  // meta-event 6, by tick (Phase 7: section names)
     };
 
     namespace smf
@@ -119,6 +130,18 @@ namespace chordzimmer
             ++denPower;
         putVarLen (t, 0);
         t.insert (t.end(), { 0xff, 0x58, 0x04, (uint8_t) song.numerator, (uint8_t) denPower, 24, 8 });
+        auto markers = song.markers;
+        std::stable_sort (markers.begin(), markers.end(), [] (const MidiMarker& a, const MidiMarker& b) { return a.tick < b.tick; });
+        int64_t markerAt = 0;
+        for (const auto& m : markers)
+        {
+            const int64_t tick = m.tick > markerAt ? m.tick : markerAt;
+            putVarLen (t, (uint32_t) (tick - markerAt));
+            markerAt = tick;
+            t.insert (t.end(), { 0xff, 0x06 });
+            putVarLen (t, (uint32_t) m.text.size());
+            t.insert (t.end(), m.text.begin(), m.text.end());
+        }
         putVarLen (t, 0);
         t.insert (t.end(), { 0xff, 0x2f, 0x00 });
         putTrack (out, t);
@@ -241,6 +264,10 @@ namespace chordzimmer
                     else if (type == 0x03 && song.name.empty())
                     {
                         song.name.assign ((const char*) t.p, len);
+                    }
+                    else if (type == 0x06)
+                    {
+                        song.markers.push_back ({ tick, std::string ((const char*) t.p, len) });
                     }
                     t.skip (len);
                     if (type == 0x2f)

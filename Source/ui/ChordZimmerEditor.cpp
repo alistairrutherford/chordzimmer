@@ -282,7 +282,7 @@ namespace chordzimmer
         // Heard, Export, a palette cell and a timeline block say what they hold now (what was
         // heard, the bars; the chord's notes; its length), when they have something to say.
         juce::String live;
-        if (key == params::analyse || key == "ui.export" || key == "display.palette" || key == "display.timeline")
+        if (key == params::analyse || key == "ui.export" || key == "ui.dragSelection" || key == "display.palette" || key == "display.timeline")
             if (auto* tip = dynamic_cast<juce::TooltipClient*> (c))
                 live = tip->getTooltip();
         info.showKey (key, live);

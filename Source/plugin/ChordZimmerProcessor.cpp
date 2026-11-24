@@ -24,7 +24,6 @@ namespace chordzimmer
         {
             tree.removeChild (tree.getChildWithProperty ("id", params::analyse), nullptr);
             tree.removeChild (tree.getChildWithProperty ("id", params::detect), nullptr);
-            tree.removeChild (tree.getChildWithProperty ("id", params::listen), nullptr);
         }
 
         const char* analyseName (params::AnalyseMode m)
@@ -720,19 +719,17 @@ namespace chordzimmer
         return writeTake (file, error) ? file : juce::File();
     }
 
-    juce::File ChordZimmerProcessor::writePatternExport (int pattern, bool chordsOnly, juce::String& error)
+    juce::File ChordZimmerProcessor::writeSelectionExport (const Selection& selection, bool chordsOnly, juce::String& error)
     {
-        const auto w = getWorkspace();
-        if (pattern < 0 || pattern >= numPatterns || w.patterns[(size_t) pattern].empty())
+        const auto p = getProgression();
+        if (p.empty())
         {
-            error = "Nothing to drag: the pattern is empty.";
+            error = "Nothing to drag: the timeline is empty.";
             return {};
         }
         const auto s = snapshot.engineSettings();
-        auto song = renderPattern (w, pattern, s, hostBpm.load(), hostNumerator.load(), hostDenominator.load(), chordsOnly);
-        const int bars = (int) std::ceil (w.patterns[(size_t) pattern].totalHalfBeats() * 0.5 / 4.0 - 1.0e-9);
-        const juce::String name = "ChordZimmer " + juce::String (patternName (pattern)) + " " + juce::String (keyName (s.key)).upToFirstOccurrenceOf ("/", false, false)
-                                + (chordsOnly ? " chords" : "") + " " + juce::String (bars) + (bars == 1 ? " bar" : " bars");
+        auto song = renderSelection (p, selection, s, hostBpm.load(), hostNumerator.load(), hostDenominator.load(), chordsOnly);
+        const auto name = juce::String::fromUTF8 (song.name.c_str()) + (chordsOnly ? " chords" : "");
         song.name = name.toStdString();      // the clip's name in the host
         const auto bytes = writeMidiFile (song);
         const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("ChordZimmer Export")
