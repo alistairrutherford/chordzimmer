@@ -1,0 +1,125 @@
+// The editor's panels (ChordChimp's PLAN.md §5):
+//
+//   TopBar         the name · On · the preset browser · Export (drag out the last bars played) ·
+//                  Keys (show or hide the output keyboard). Pattern and Play are in the
+//                  workspace panel (Phase 6, WorkspacePanel.h)
+//   GlobalRow      Key · Heard · Scale · Chord Group · Progression · Octave
+//   HeardKey       the Heard box (ChordChimp's docs/KEY_DETECTION_PLAN.md K5): Analyse, then the key heard;
+//                  a click on the guess sets Key (and Scale) to it, ✕ stops analysing
+//   EffectsPanel   four cards: Strum, Velocity; Voicing (Voicing, Bass, Stack, Voice leading),
+//                  Keys (Hold, Key octave). ChordMonkey's Arp, Style, Repeat, Step seq and Bind /
+//                  Keys-Lock row are gone (PLAN.md §2); PLAN.md §3.6's performance popover
+//                  replaces this panel in Phase 4.
+//
+// Test pattern (the LiveBridge rig) has no control: Live's device parameters reach it.
+#pragma once
+
+#include "Keyboards.h"
+#include "PresetBar.h"
+
+namespace chordzimmer::ui
+{
+    class TopBar : public juce::Component
+    {
+    public:
+        TopBar (ChordZimmerProcessor&, Bindings&, std::function<void (bool)> showKeyboard);
+        void setKeyboardShown (bool shown);
+        void refresh();
+        void paint (juce::Graphics&) override;
+        void resized() override;
+
+        PresetBar presets;
+        ExportHandle exportHandle;
+
+    private:
+        ParamControl enable;
+        juce::TextButton keyboardButton { "Keys" };
+        juce::Rectangle<int> nameArea;
+    };
+
+    // The Analyse control and the key it heard. It follows the Analyse parameter, so a change
+    // from the host shows at once.
+    class HeardKey : public juce::Component,
+                     public juce::SettableTooltipClient
+    {
+    public:
+        HeardKey (ChordZimmerProcessor&, Bindings&);
+        void refresh (const UiModel&);
+        void paint (juce::Graphics&) override;
+        void resized() override;
+        void mouseUp (const juce::MouseEvent&) override;
+        bool keyPressed (const juce::KeyPress&) override;
+
+        // What a click does: on the box, or on its ✕ (`close`). For tests too.
+        void click (bool close);
+        const juce::String& getText() const noexcept { return text; }
+        juce::Rectangle<int> boxBounds() const noexcept;
+        juce::Rectangle<int> closeBounds() const noexcept;   // empty unless analysing
+        // Whether `s` fits the box as it is now; the widths the column needs for its shortest
+        // and its longest text.
+        bool fits (const juce::String& s) const;
+        static int minimumWidth();
+        static int preferredWidth();
+
+    private:
+        void update();
+        juce::String chooseText (const juce::String& full, const juce::String& shorter, const juce::String& shortest) const;
+        bool analysing() const noexcept { return mode != params::AnalyseMode::Off; }
+        bool matchesKey() const noexcept;
+
+        ChordZimmerProcessor& processor;
+        Bindings& bindings;
+        params::AnalyseMode mode = params::AnalyseMode::Off;
+        KeyGuess guess;
+        int key = 0;
+        Scale scale = Scale::Major;
+        juce::String text;
+        bool highlighted = false;     // the guess, confident: accent
+        static constexpr int captionHeight = 15, closeWidth = 18;
+    };
+
+    class GlobalRow : public juce::Component
+    {
+    public:
+        GlobalRow (ChordZimmerProcessor&, Bindings&);
+        void refresh (const UiModel&);
+        void resized() override;
+
+        HeardKey heard;
+
+    private:
+        Bindings& bindings;
+        ParamControl key, scale, group, progression, octave;
+    };
+
+    class EffectsPanel : public juce::Component
+    {
+    public:
+        explicit EffectsPanel (Bindings&);
+        void refresh (const UiModel&);
+        void paint (juce::Graphics&) override;
+        void resized() override;
+
+        // The Info View's key for a point on the panel itself: the card it is on.
+        juce::String infoKeyAt (juce::Point<int>) const;
+        // The height the cards need at this width (the editor sizes the chord pads around it).
+        static int preferredHeight();
+
+    private:
+        struct Card
+        {
+            juce::String title;
+            std::vector<ParamControl*> controls;
+            juce::Rectangle<int> bounds;
+        };
+
+        ParamControl& add (const juce::String& paramId, const juce::String& label = {});
+        void layoutCard (Card&);
+
+        Bindings& bindings;
+        juce::OwnedArray<ParamControl> controls;
+        std::array<Card, 4> cards;
+
+        static constexpr int titleHeight = 22, controlHeight = 40, gap = 8;
+    };
+}

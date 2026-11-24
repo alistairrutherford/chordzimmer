@@ -1,0 +1,379 @@
+# ChordZimmer: Project Plan
+
+A macOS VST3 MIDI plug-in for Ableton Live that emulates the **chord creation features of Klimper 2**
+(Polydigm Software): a **chord palette** laid out by scale degree and complexity, colour-coded by
+chord quality and marked in-key or out-of-key; **borrowing** from adjacent keys around the circle
+of fifths and from parallel modes; a **progression timeline** of sections and chords with
+durations; **matching chords to a melody**; building a chord from chosen notes; previewing through
+any instrument in Live; and **drag-out to a MIDI clip**. ChordZimmer makes no sound of its own. It
+sends MIDI to an instrument on another track, as ChordChimp, Chordism and ChordMonkey do.
+
+**Starting point:** a fork of **ChordMonkey** (`../chordmonkey`, v1.1.0), which already has the
+chord theory (13 scales, `ChordTypes`, `ChordRecognizer`, `VoiceLeading`, `ChordNamer`,
+`RomanNumeral`), a palette, a workspace model, host-synced `PatternPlayer`, the offline Export
+renderer and drag-out, presets, `Tools/install.sh` and the JUCE-free core test setup. ChordZimmer
+replaces ChordMonkey's Scaler-style surface (fixed pads, A–D patterns, Bind, Keys-Lock, Styles)
+with Klimper's: the degree × complexity palette, the key navigator, and a section-based timeline.
+
+**Clean room.** As with the siblings, ChordZimmer copies *behaviour* only. No code, artwork,
+sounds, manual text or product name come from Klimper. Its look (dark navy, round chord buttons)
+is a general style, and ours gets its own palette and layout.
+
+**What Klimper 2 does (from its product page and online manual, read 2026-11-24):**
+
+| Klimper feature | What the manual says |
+|---|---|
+| Chord palette | The chords of the project's scale, organised so you can try combinations "without digging through submenus". Columns are the scale degrees; rows go up in complexity: *Other* (non-triadic: power chords, sus) at the bottom, then *Triads*, then 6ths/7ths, then *Extended* chords (Δ7, add9 …) above, with a vertical *Complexity* scroll. Click to preview. |
+| Colours | Green: major triads and their extensions. Purple: minor triads and their extensions. Grey: everything else (power, suspended, augmented, diminished). |
+| In key | A **filled** circle: every note is in the project's key. **Hollow**: at least one note is out of key. |
+| Progressions | Drag a chord to the sequence bar: it makes a **section**. Drop more chords into it, or to the left/right of a section to start a new one. Drag a chord's or section's end to change its **duration**. Shift selects several; Alt/Option-drag duplicates (also in place, between sections). Transport: rewind, play, loop; snap (1/8); the current chord and its Roman numeral shown. |
+| Match a melody | Select melody notes in Klimper's piano roll, then *Match against selected notes* in the palette menu. |
+| Borrowing | The palette follows the **home key** (house icon). **◀ ▶** step along the circle of fifths to adjacent keys ("the more steps, the more exotic"). Clicking the mode switches to **parallel modes** (users report major modes and harmonic-minor modes). |
+| Chord from notes | In the piano roll, select notes, right-click the root, *Selected notes → add / set* chord: chords not in the palette. |
+| Chord Relations | A button in the palette footer. The manual doesn't describe it; a reviewer asks "why it is suggesting certain choices", so it shows relations between chords (our design: §3.5). |
+| Preview and export | Plays chords through the DAW's instruments; drag the export button to a track or the desktop; the clip holds the current selection (chord, section(s) or whole track). |
+| Also in Klimper, **not chords** | Melody tracks with a piano roll, *harmonic guides* (root / chord / extension / in-key rows), ghost notes of other tracks, a *Klimper Track* companion plug-in per melody track, a built-in piano. |
+
+---
+
+## 1. Goals
+
+| # | Requirement | Acceptance criterion |
+|---|-------------|----------------------|
+| G1 | Loads in Live 12 as a VST3 and sends MIDI to an instrument on another track | `pluginval` strictness 10 passes. In Live, an instrument with *MIDI From: ChordZimmer* plays and records the output sample-accurately. |
+| G2 | **Palette:** for any key and mode, 7 degree columns × complexity tiers of chords, each colour-coded and marked in/out of the home key | Theory tests against the music21 fixture (inherited), plus a palette table test: for C major and A harmonic minor, every cell's name, notes, colour and in-key flag match a hand-written table (§3.1). |
+| G3 | **Borrowing:** ◀ ▶ walk the circle of fifths; the mode menu lists the parallel modes of the current scale family; Home returns | Navigator tests: 12 steps return home; every key × mode family; in-key flags always against the **home** key. |
+| G4 | **Progression timeline:** sections of chords with durations, insert/move/resize/duplicate/delete, undo | Model tests: every edit, including insert between sections and Alt-duplicate in place; snap; save/restore round trip; undo/redo of every edit. |
+| G5 | **Plays in time with Live** (and free-running for preview), loop on a selection | Fake-transport tests (inherited from ChordMonkey's `test_player`): each chord change on its beat at 32–2048 samples, 44.1–96 kHz, across loops, locates and tempo changes. |
+| G6 | **Match against notes:** rank palette chords by how well they fit a set of notes | Matcher tests on hand-made melodies (§3.4): the expected chord is top-ranked; ties broken by the stated rule. |
+| G7 | **Chord from notes:** add or set a timeline chord from chosen notes and root | Recognizer tests (inherited) plus naming of chords outside the palette (e.g. C7♯9, Fm(maj7)). |
+| G8 | **Export:** drag the selection (chord, sections, or the whole progression) into Live as a MIDI clip | The exported file equals the notes recorded live from the same selection. |
+| G9 | Real-time safe, no stuck notes | ChordMonkey's rules: no allocation or locks in `processBlock`, all-notes-off on stop, bypass, edit and deletion; the stuck-note fuzz passes with timeline edits during playback. |
+| G10 | ≤ 64 host parameters | Live auto-populates them all; no `Options.txt` change. |
+
+**Out of scope (first version):** Windows, AU, AAX, a built-in sound, melody tracks and the piano
+roll, harmonic guides and ghost notes, the per-track companion plug-in, MIDI import of melodies
+(Klimper doesn't have it either; see Phase 9), MPE.
+
+---
+
+## 2. Feature map (ChordMonkey → ChordZimmer)
+
+| Area | ChordMonkey | ChordZimmer |
+|---|---|---|
+| Palette | 7 scale pads + 5 borrowed pads, shaped by one Chord Group | **Replaced:** degree × complexity grid (§3.1), colours, filled/hollow in-key marks |
+| Key / scale | Key, Scale (13) | **Kept** as the **home key**; plus a palette key/mode navigator (§3.2); scales grouped into **families** (major modes, harmonic-minor modes, melodic-minor modes) with the missing modes added |
+| Workspace | Patterns A–D × 8 slots | **Replaced:** one progression of **sections** of chords with beat durations (§3.3) |
+| Playback | `PatternPlayer`, pattern switch at the bar | **Kept**, driven by the timeline; loop region from the selection |
+| Performance | Voicing, Bass, 17 Styles, Swing, Humanize, Strum/Arp/Repeat/Velocity/Hold | **Simplified:** Voicing, Bass, Voice leading, Velocity, Strum. Styles, Arp, Repeat, Step seq **dropped** (Klimper writes block chords; open question 2) |
+| Keyboard | Bind, Keys-Lock | **Dropped.** MIDI in feeds Match and Chord-from-notes; optional "play palette column" mode (open question 3) |
+| Chord sets | 41 factory sets | **Dropped** as a browser; a few factory **template** progressions on the presets menu |
+| Detect | `ChordListener` | **Reused** as Chord-from-notes (§3.4) |
+| Substitutes | Slot right-click list | **Reused** inside Chord Relations (§3.5) |
+| Export | Pattern drag-out | **Kept**; content follows the selection |
+
+---
+
+## 3. Functional design
+
+### 3.1 Palette
+
+- **Columns:** the 7 degrees of the *palette* key and mode (I … vii°), headed by Roman numerals
+  relative to the **home** key, so a borrowed column reads ♭VII, iv etc.
+- **Rows (complexity tiers),** bottom to top. Each degree column holds the variants of its tier
+  that are built on that degree; a cell is left empty when the variant doesn't exist for that
+  degree (as in Klimper's screenshot, where some cells are blank):
+
+  | Tier | Name | Variants (built from scale steps where possible) |
+  |---|---|---|
+  | 0 | Other | 5 (power), sus2, sus4 |
+  | 1 | Triads | the diatonic triad (maj, min, dim, aug) |
+  | 2 | Sixths & sevenths | 6 / m6, 7 / m7 / ø7 / °7 (diatonic 7th) |
+  | 3 | Colour | maj7, add9 / madd9, 7sus4 |
+  | 4 | Extended | 9 / m9 / maj9, 11, 13, 6/9 |
+  | 5 | Altered | 7♭9, 7♯9, aug, dim (non-diatonic options; usually hollow) |
+
+  The table lives in `core/theory/PaletteTiers.h` as data, so tiers can be tuned without code.
+- **Colour:** green for chords whose triad is major, purple minor, grey for the rest. Computed from
+  the chord's 3rd and 5th, not its name.
+- **Filled / hollow:** filled if every pitch class is in the **home** scale, hollow otherwise.
+  Borrowed palettes therefore show which chords stay safe.
+- **Preview:** click a cell to sound it (note-on to the output until mouse-up, or for 1 beat; voice
+  led from the last chord heard). Hover shows notes, name, numeral and the tones out of key.
+- **Scroll:** vertical, showing about 4 tiers; triads in view by default.
+
+### 3.2 Key navigator (borrowing)
+
+Footer bar: **⌂ Home**, **◀ key ▶**, **mode ▾**, **Chord Relations**, **Match ▾**.
+
+- ◀ ▶ move the palette key a fifth down/up (C → F / G), keeping the mode. The bar shows how many
+  steps from home (±1 … ±6).
+- *mode ▾* lists the 7 modes of the current **family** on the same tonic (parallel modes): C
+  Ionian ⇄ C Dorian ⇄ … ⇄ C Locrian; for harmonic minor: harmonic minor, Locrian ♮6, Ionian ♯5,
+  Dorian ♯4, Phrygian dominant, Lydian ♯2, altered ♭♭7. Melodic-minor modes as a third family.
+  The rest of the existing scales (Hungarian minor, Double harmonic) stay as single-mode families.
+- ⌂ restores the home key and mode. The home key is the **Key** and **Scale** parameters; the
+  palette key is UI state saved with the plug-in, not a parameter.
+- Optional: "Use DAW key" when the host reports one (Live 12 doesn't via VST3; skip unless found).
+
+### 3.3 Progression timeline
+
+- One **progression**, a list of **sections**, each a list of **chords**. A chord stores its notes
+  as pitch classes + root + bass + inversion + octave + a duration in beats (default 4); a section
+  stores a name (Verse, Chorus …, editable) and colour. Positions are derived from the order.
+- **Editing** (all in `core/model/Progression.h`, all undoable via a command list):
+  - drop a palette chord on empty space → new section; on a section → insert at that point;
+    between two sections → new section there;
+  - drag a chord's right edge to change its duration, snapped (1/16 … 1 bar; default 1/8, as
+    Klimper); drag a section's edge to scale all its chords;
+  - drag to move; **Alt/Option-drag to duplicate**, dropping anywhere including between sections
+    (the complaint in Klimper's reviews is handled from the start);
+  - Shift/Cmd-click multi-select; Delete; Cmd-C/V pasting **at the insertion marker**, not the end;
+  - right-click a chord: inversion, octave, bass note, *Replace with ▸* (relations, §3.5), rename
+    section, delete.
+- **Transport bar:** ⏮ rewind, ▶ play, ⟲ loop (loops the selected chords/sections, else all),
+  snap, current chord name and numeral. **Sync** follows Live's transport (position = song
+  position modulo the progression length, or from a start bar); **Preview** runs its own clock at
+  the host tempo so you can audition with Live stopped.
+- The progression is saved in the plug-in state (and so with the Live set) and in presets.
+
+### 3.4 Match and Chord-from-notes
+
+Klimper takes notes from its own piano roll. ChordZimmer has no piano roll, so the notes come from:
+
+1. **Held / played notes** on ChordZimmer's MIDI input (play a phrase into it; a *Listen* toggle
+   collects the last N bars into a note set with durations);
+2. a **mini note picker**: a one-octave strip of 12 toggle keys in the Match panel;
+3. (Phase 9) a dropped `.mid` file.
+
+**Match against notes** scores every palette cell (the current key's, and optionally all keys
+within ±2 fifths):
+`score = Σ duration-weight of notes that are chord tones (root/3rd weighted higher) − penalty × Σ
+weight of notes that clash (a semitone above a chord tone) − small complexity cost`. The top 8
+cells are highlighted with a rank badge; non-matches dim. Ties: in-key before borrowed, then lower
+tier.
+
+**Chord from notes:** in the Match panel, pick notes (or use the held ones), choose the root, then
+**Set** (replace the selected timeline chord) or **Add** (insert after it). Named by
+`ChordRecognizer` / `ChordNamer`; any pitch-class set is allowed, named as a slash or `(add…)`
+chord when it has no standard name.
+
+### 3.5 Chord Relations
+
+Our design, since the manual doesn't describe Klimper's: with a chord selected (palette or
+timeline), *Chord Relations* overlays the palette with arrows/badges for
+**dominant** (V/x), **subdominant**, **relative** major/minor, **tritone substitute**, **common-tone**
+chords (sharing 2+ notes), and **voice-leading distance** (number of semitone moves). The same list
+appears in the timeline chord's *Replace with ▸* menu (reusing ChordMonkey's `Substitutes.h`), and a
+"Next ▸" strip suggests the 5 most common follow-ups from a small transition table of our own.
+
+### 3.6 Performance and output
+
+- **Voicing:** Close / Open / Spread / Drop-2; **Bass:** off / root / root+5 one octave down;
+  **Voice leading:** off / smooth (inherited); **Octave**; **Velocity** (fixed, 1–127);
+  **Strum** (0–100 ms, up/down). Applied at playback and in Export.
+- One MIDI channel out. All-notes-off on stop, bypass, edit of the playing chord, and deletion.
+
+### 3.7 Export
+
+A drag handle at the bottom right. The clip holds the **selection**: one chord, chosen sections,
+or (nothing selected / track clicked again) the whole progression, rendered through §3.6 by the
+offline renderer from ChordMonkey. Written to a temp `.mid` named after the sections (e.g.
+`Verse-Chorus_C.mid`); dragging to Finder also works. Section names become MIDI markers.
+
+### 3.8 Parameters (target: about 14)
+
+Key, Scale (home), Play, Loop, Sync mode, Octave, Voicing, Bass, Voice leading, Velocity, Strum,
+Strum direction, Listen, Enable (pass input through). The palette position, progression and
+selections are state, not parameters.
+
+---
+
+## 4. Architecture
+
+Same stack as the siblings: **JUCE 8.0.14, C++17, Projucer + xcodebuild**, JUCE at
+`~/Development/JUCE`. VST3 + Standalone. Header-only core in plain C++ (no JUCE) so the core tests
+run without a host.
+
+```
+ UI (message thread)
+   Palette ─┐                  ┌─ Progression (+ UndoList) ─► SnapshotExchange ─┐
+   Navigator┼─► PaletteBuilder │                                                 ▼
+   Match ◄──┘   (key,mode,home)│        Transport ─► Clock ─► ProgressionPlayer ─► Performer ─► VoiceTracker ─► EventQueue ─► MIDI out
+                               │                                                     ▲
+ MIDI in ─► InputRouter ─► NoteCollector (FIFO) ─► Match / Chord-from-notes          │
+                       └─► Preview requests (FIFO) ──────────────────────────────────┘
+```
+
+### 4.1 Modules
+
+| Module | From | Notes |
+|---|---|---|
+| `core/theory`: `Scales`, `ChordTypes`, `ChordModel`, `ChordNamer`, `RomanNumeral`, `VoiceLeading`, `ChordRecognizer`, `Voicings`, `Substitutes` | ChordMonkey | `Scales` gains families and the missing harmonic/melodic-minor modes |
+| `core/theory/PaletteTiers.h`, `PaletteBuilder.h`, `CircleOfFifths.h` | **New** (Phase 1) | Tier table; builds the grid for (palette key, mode, home key); in-key and colour |
+| `core/theory/Matcher.h`, `Relations.h` | **New** (Phases 5, 6) | Scoring (§3.4); relations and the transition table (§3.5) |
+| `core/model/Progression.h`, `UndoList.h` | **New** (Phase 2) | Sections, chords, edits as commands, the saved text |
+| `core/engine/ProgressionPlayer.h` | ChordMonkey `PatternPlayer`, reworked (Phase 3) | Timeline from beat position; loop region; Sync / Preview clocks |
+| `core/engine/NoteCollector.h` | ChordMonkey `ChordListener`, reworked (Phase 5) | Collects notes with durations for Match |
+| `core/engine/*` (Clock, Transport, EventQueue, VoiceTracker, Strum, Velocity, SnapshotExchange) | ChordMonkey | As is. Style, Arp, Repeat, KeysLock, KeyRouter **deleted** |
+| `core/midiio/MidiFile.h`, offline renderer | ChordMonkey | Markers added |
+| `plugin/*` | ChordMonkey, renamed | Progression in the state XML |
+| `ui/*` | ChordMonkey's `Theme`, `ParamControl`, `PresetBar`, `InfoView` | New `PalettePanel`, `NavigatorBar`, `TimelinePanel`, `MatchPanel`, `RelationsOverlay` |
+
+**Copy, don't share**, as the siblings do. Code comments cite `PLAN.md §…`; copied code cites
+*ChordMonkey's PLAN.md §…* (`../chordmonkey/`).
+
+### 4.2 Identity
+
+| | ChordZimmer |
+|---|---|
+| Bundle ID | `com.alistairrutherford.chordzimmer` |
+| Manufacturer / plug-in code | `ARut` / `Czim` |
+| Installed as | `~/Library/Audio/Plug-Ins/VST3/ChordZimmer.vst3`, `~/Applications/ChordZimmer.app` |
+| User data | `~/Music/ChordZimmer/Presets/` |
+
+Fixed in Phase 0; never change them.
+
+---
+
+## 5. UI
+
+About 1000 × 640, resizable 80–150 %. Top to bottom:
+
+1. **Preset bar** (inherited) and the **transport bar** (§3.3).
+2. **Timeline**: sections as labelled lanes of chord blocks, width = duration; playhead; insertion
+   marker; zoom with Alt+Shift+wheel / Cmd ±.
+3. **Palette**: the scrollable grid (§3.1), round cells, numeral headers, tier labels on the left.
+4. **Footer**: navigator (§3.2), Chord Relations, Match, performance popover (§3.6), Export handle.
+5. **Info View** strip (inherited from ChordMonkey).
+
+Keyboard: Space play/stop, Delete, Cmd-Z / Shift-Cmd-Z, Cmd-C/V, ← → move selection, L loop.
+
+### 5.1 Visual design: "Night Studio"
+
+The brief is for it to **look cool**: a dark, glowing, instrument-like surface, clearly its own
+and not a copy of Klimper's flat navy. All colours, radii, glows and fonts live in `ui/Theme` as
+named tokens, so the look can be retuned in one place.
+
+| Token | Value | Use |
+|---|---|---|
+| `bg` | `#0A0D16` → `#121829` vertical gradient, faint 4 % noise texture | Editor background |
+| `panel` | `#161C2E` at 85 % with a 1 px `#FFFFFF14` top highlight, 14 px radius | Timeline, palette and footer cards (a "glass" look) |
+| `text` / `textDim` | `#E8ECF8` / `#7C86A6` | Labels; numerals and tier labels dimmed |
+| `major` | gradient `#2EE6C5` → `#1A9FD9` (teal to sky) | Major-family chords |
+| `minor` | gradient `#B26BFF` → `#E04FB0` (violet to magenta) | Minor-family chords |
+| `other` | gradient `#6B7699` → `#454E6B` (slate) | Power, sus, dim, aug |
+| `accent` | `#FFB547` (amber) | Playhead, selection, Home button when away from home, Export handle |
+| `danger` | `#FF5C7A` | Out-of-key tones in hover cards |
+
+- **Chord cells** are orbs: a radial gradient of their family colour, a soft outer glow (blurred
+  drop shadow in the family colour at 35 %), name in semibold with the extension as a superscript.
+  **In key:** filled orb. **Out of key:** a 2 px gradient ring with a dark centre and a dashed
+  inner hairline, so it reads "hollow" at a glance. Hover lifts the orb (scale 1.06, glow 60 %);
+  pressing it ripples outward once.
+- **Playing:** the sounding chord's orb and timeline block pulse with the beat (glow 35 → 80 % on
+  each beat, eased), driven by `VBlankAttachment`; nothing animates when idle, so it costs no CPU.
+- **Timeline:** sections are rounded lanes tinted with their section colour (8 hues, low
+  saturation) and a label tab; chord blocks are pill-shaped with their family gradient at 70 %;
+  the playhead is an amber line with a short fading trail; the loop region is an amber-tinted band.
+- **Navigator:** the ◀ ▶ key stepper sits beside a small **circle-of-fifths dial** (12 dots,
+  home in amber, current palette key lit, the arc between them drawn), so borrowing distance is
+  visible.
+- **Match:** ranked cells get an amber rank badge; non-matching cells fade to 30 %.
+- **Type:** *Space Grotesk* for headings and chord names, *Inter* for UI text (both SIL OFL,
+  embedded via BinaryData).
+- **Motion rules:** 120–180 ms ease-out for hovers and drags, no motion longer than 300 ms, and
+  a *Reduce motion* option in the settings menu that turns pulses and ripples off.
+- Snapshot reference images (Phase 4) are taken with this theme; Phase 0 brings in the tokens
+  and fonts, so even the forked UI already looks like ChordZimmer.
+
+---
+
+## 6. Milestones
+
+| Phase | Est. | Deliverable | Exit criteria |
+|---|---|---|---|
+| **0. Fork and identity** | ½ day | `git init`; copy ChordMonkey; rename (namespace, classes, bundle ID, `Czim`, folders); delete Bind/Keys-Lock/Style/Arp/Repeat/chord sets; `Theme` tokens and fonts from §5.1 | Builds; `pluginval` 10; loads in Live next to ChordMonkey; core tests pass; editor shows the §5.1 colours and fonts |
+| **1. Palette theory** | 1 day | Scale families + new modes, `PaletteTiers`, `PaletteBuilder`, `CircleOfFifths` | Palette table tests (G2); navigator tests (G3); modes against music21 |
+| **2. Progression model** | 1 day | `Progression`, `UndoList`, state XML | Model tests (G4), including insert-between and duplicate-in-place |
+| **3. Playback** | 1 day | `ProgressionPlayer`, Sync/Preview, loop region, preview requests, §3.6 performance | Fake-transport tests (G5); stuck-note fuzz with edits during play (G9) |
+| **4. UI: palette, navigator, timeline** | 3 days | `PalettePanel`, `NavigatorBar`, `TimelinePanel` with drag/drop, resize, select, duplicate, snap, transport | Snapshot tests: every parameter has a control; reference images; scripted drag tests on the model |
+| **5. Match and Chord-from-notes** | 1½ days | `NoteCollector`, `Matcher`, `MatchPanel` (Listen, note picker, Set/Add) | Matcher tests (G6); recognizer naming tests (G7) |
+| **6. Chord Relations** | 1 day | `Relations`, overlay, *Replace with ▸*, Next strip | Relations for C major / A minor checked by hand |
+| **7. Export and Live check** | 1 day | Selection-aware export with markers; bridge tests and manual checklist | Export = render (G8); recorded in Live at 0.000 ms; set save/reopen restores the progression |
+| **8. Hardening and install** | ½ day | Benchmark, CI, README, screenshot, factory templates | 8 instances < 1 % CPU each; `Tools/install.sh --validate` clean |
+| *9. Optional* | 1–2 days | Drop a `.mid` in: melody → Match, chords → timeline (the feature Klimper users ask for) | Import tests on fixtures |
+
+**Total: about 10½ working days** to Phase 8.
+
+---
+
+## 7. Testing
+
+Inherited from ChordMonkey (core tests via `Tests/run_tests.sh` with Xcode's clang, the music21
+fixture, `pluginval`, the snapshot rig, the stuck-note fuzz and malloc hook, the Ableton MCP bridge
+checks), plus:
+
+- `test_palette`: hand-written grids for C major, A minor, A harmonic minor, D Dorian; colours and
+  filled/hollow flags; empty cells where a variant doesn't exist.
+- `test_navigator`: ±12 fifths return home; parallel-mode lists per family; in-key always vs home.
+- `test_progression`: every edit and its undo; snap; insert-between; duplicate-in-place; paste at
+  marker; XML round trip; garbage XML rejected without a crash.
+- `test_player`: chord changes on beat (buffer sizes × sample rates × loops × locates × tempo).
+- `test_matcher`: ~20 melodies with an expected best chord; tie rules.
+- `test_export`: exported file equals the offline render and the recorded output.
+- **Live (bridge):** load, route to an instrument, play a 3-section progression, record, compare;
+  drag-out lands as a clip with the right length.
+
+---
+
+## 8. Risks
+
+| Risk | Mitigation |
+|---|---|
+| Timeline drag-and-drop UI is the bulk of the work and easy to get fiddly | Every gesture is a `Progression` command first, tested without UI; the UI only maps mouse to commands |
+| Tier table produces odd or clashing chords in exotic modes | It's data; tune per family with the palette tests as the guard |
+| Matching without a piano roll is less direct than Klimper's | Listen + note picker in Phase 5, `.mid` import in Phase 9; revisit after use |
+| Preview while Live is stopped: Live may not process a MIDI effect's output with the transport stopped | Monitor *In* on the instrument track (as Klimper's own setup page asks); verified in Phase 0 |
+| Similarity to Klimper's look | Own colours, layout and names; behaviour only |
+
+---
+
+## 9. Open questions
+
+1. **Scope:** chord features only (this plan), or also Klimper's melody side (piano roll with
+   harmonic guides, ghost notes, a companion per-track plug-in)? The latter is roughly another
+   1½–2 weeks and a second plug-in.
+2. **Rhythm:** Klimper writes block chords. Keep it that way, or keep one of ChordMonkey's Styles as
+   an optional performance?
+3. **Keyboard playing:** should incoming MIDI also *play* chords (e.g. white keys → the current
+   palette's triad row, black keys → tier above), or only feed Match? Klimper doesn't do it.
+4. **Built-in sound:** none (as siblings), or a simple sine/piano in the Standalone only?
+5. **Fork base:** ChordMonkey (recommended: theory, player, export, recognizer, UI kit) vs a lighter
+   fork of ChordChimp.
+
+---
+
+## 10. Repository layout
+
+```
+chordzimmer/
+  ChordZimmer.jucer   Builds/   JuceLibraryCode/
+  Source/core/{theory,model,engine,midiio}/   Source/plugin/   Source/ui/
+  Tests/   Tools/install.sh   docs/
+  PLAN.md   README.md   CHANGELOG.md
+```
+
+## 11. Research sources
+
+- Product page: https://www.klimper-plugin.com/products/klimper-2 (features, requirements, reviews)
+- Manual, chords: https://www.klimper-plugin.com/pages/chords-manual
+- Manual, piano roll: https://www.klimper-plugin.com/pages/piano-roll-manual
+- Manual, export: https://www.klimper-plugin.com/pages/exporting-midi
+- Manual, Ableton Live setup: https://www.klimper-plugin.com/pages/using-klimper-with-ableton-live
+
+## 12. Status
+
+| Phase | Status | Detail |
+|---|---|---|
+| 0. Fork and identity | **Done (2026-11-24)** | Copied from ChordMonkey 1.1.0 at `1a9a315` (its tracked `Source/`, `Tests/`, `Tools/`, CI, `.jucer`, LICENSE; not its `Builds/`, `dist/`, `Tests/build/`). **Renamed** per §4.2: namespace `chordzimmer`, `ChordZimmerProcessor`/`ChordZimmerEditor`, `ChordZimmer.jucer` (id `CzimPj`), bundle ID `com.alistairrutherford.chordzimmer`, `ARut`/`Czim`, `~/Music/ChordZimmer/Presets/`, `CHORDZIMMER_FIXTURES`; old bare `PLAN.md` citations now read *ChordMonkey's PLAN.md*. **Removed** (§2, §4.1): Bind and Keys-Lock (`KeyRouter.h` → `KeyMap.h` with only the All-keys map; `KeysLock.h`), `Style.h` (with Swing, Humanize), `Arp.h`, `Repeat.h`, `StepSequencer.h`, the arp/repeat rates, the chord-set browser (`ChordSetManager`) and factory sets (`ChordSetLibrary.h`), the presets built on them (Init + 10 remain), their 17 parameters (23 left), the Keyboard row, the Arp/Style/Repeat/Step seq cards, `StepSeqView`, `test_bind`, `test_style`, `test_chordsets`, and the snapshot rig/benchmark (`Tests/Snapshot`, `run_snapshot.sh`, `run_bench.sh`; Phase 4 brings snapshots back) and the Chordism preset dump tool. **Kept:** the theory, `ChordSets.h` (numeral parser), `PatternPlayer` (its jump API now unused, for Phase 3), Strum, Velocity, Hold, Stack, Voicings, VoiceTracker, EventQueue, SnapshotExchange, `ChordListener`/Detect, `KeyListener`/Analyse, `Substitutes`, MidiFile + export renderer, presets, InfoView. **Night Studio** (§5.1) in `ui/Theme`: tokens, gradient + grain background, glass cards, family gradients, amber accent, radii, glow and orb helpers; pads are family orbs (filled in key, hollow out of key, hover/play glow), workspace slots family pills; Space Grotesk + Inter (OFL, `Resources/Fonts`, BinaryData); editor 1000 × 640. **Fixed in inherited code** (found by the tests rewritten for strums): a strum across a loop wrap or locate placed its later notes from the stale start; Velocity now reads the bar a sample on, so render and host agree on a strum note on a grid line. **Checks:** `Tests/run_tests.sh`: all 12 binaries passed; Projucer + xcodebuild Debug and Release (universal) built with no warnings from `Source/`; `Tools/install.sh --validate` installed `ChordZimmer.vst3` and `ChordZimmer.app` (ad hoc signed) and `pluginval` strictness 10 passed; the Standalone shows the Night Studio editor (`docs/editor.png`). **Not checked:** Live (the bridge wasn't connected: Live not running); the §8 risk "preview while Live is stopped" stays open for Phase 3. |
