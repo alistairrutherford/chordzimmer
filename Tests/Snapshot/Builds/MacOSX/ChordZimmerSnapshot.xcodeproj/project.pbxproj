@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0686E6E63C14ADBB47C6B430 /* MatchPanel.cpp */ = {isa = PBXBuildFile; fileRef = 65921BD37B374839BB6ABB93; };
 		1066D9A445B35A103A7D5015 /* ChordZimmerEditor.cpp */ = {isa = PBXBuildFile; fileRef = FE6FB82B9DC95BFCC4D1B0E9; };
 		10C339D8D2939C6CF06D6B65 /* include_juce_graphics.mm */ = {isa = PBXBuildFile; fileRef = B49C7E35B8DBBD1D71E1A96D; };
 		1175667889AEC6CE46B8D82A /* Cocoa.framework */ = {isa = PBXBuildFile; fileRef = 84778002838A6AF2B58049C1; };
@@ -88,6 +89,7 @@
 		5EA777F59A452ABBC318226C /* include_juce_audio_processors_headless.mm */ /* include_juce_audio_processors_headless.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_processors_headless.mm; path = ../../JuceLibraryCode/include_juce_audio_processors_headless.mm; sourceTree = SOURCE_ROOT; };
 		62AD462895AB83B18024E0A4 /* SpaceGrotesk-Bold.ttf */ /* SpaceGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; name = "SpaceGrotesk-Bold.ttf"; path = "../../../../Resources/Fonts/SpaceGrotesk-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		65275C0BAFFA1A76867ABF2A /* Parameters.cpp */ /* Parameters.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Parameters.cpp; path = ../../../../Source/plugin/Parameters.cpp; sourceTree = SOURCE_ROOT; };
+		65921BD37B374839BB6ABB93 /* MatchPanel.cpp */ /* MatchPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = MatchPanel.cpp; path = ../../../../Source/ui/MatchPanel.cpp; sourceTree = SOURCE_ROOT; };
 		67288FC4A381485FCA3027EC /* TimelinePanel.cpp */ /* TimelinePanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = TimelinePanel.cpp; path = ../../../../Source/ui/TimelinePanel.cpp; sourceTree = SOURCE_ROOT; };
 		6A888347F188437A0C16F5C1 /* Theme.cpp */ /* Theme.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Theme.cpp; path = ../../../../Source/ui/Theme.cpp; sourceTree = SOURCE_ROOT; };
 		6BDE8E0CF570A8AA21E63745 /* ChordZimmerProcessor.cpp */ /* ChordZimmerProcessor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ChordZimmerProcessor.cpp; path = ../../../../Source/plugin/ChordZimmerProcessor.cpp; sourceTree = SOURCE_ROOT; };
@@ -219,6 +221,7 @@
 				67288FC4A381485FCA3027EC,
 				2AA0BCC827464ADAD912958D,
 				0A6C87B4B2EC9B90AB86BA8F,
+				65921BD37B374839BB6ABB93,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -383,6 +386,7 @@
 				5CB586F0AD09426421B87CE2,
 				20FB574C434CDC554E4A4D9A,
 				BE8F6C2A02B7BB7EB831675A,
+				0686E6E63C14ADBB47C6B430,
 				C23FABB1A8CD0327D0AC2763,
 				CABE9BB91EC7EBF241AC2101,
 				39906990A29E540380507D13,

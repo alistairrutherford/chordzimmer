@@ -12,7 +12,9 @@
 //                what it does (InfoView.h). It replaces tooltips.
 //
 // Performance opens PLAN.md §3.6's popover over the palette (Panels.h, PerformancePanel), which
-// also holds what MIDI in does (Chord Group, Progression, Hold, Key octave, Heard, Detect).
+// also holds what MIDI in does (Chord Group, Progression, Hold, Key octave, Heard, Detect); Match
+// opens PLAN.md §3.4's (MatchPanel.h: Listen, the note picker, the matches, Chord from notes),
+// and the palette shows the matches' ranks meanwhile. One popover at a time.
 // ChordMonkey's chord pads, workspace panel and effects cards are gone (PLAN.md §2).
 //
 // Keys (PLAN.md §5): Space play/stop, L loop, Cmd-Z / Shift-Cmd-Z, Delete, Cmd-C/X/V/D, ← →,
@@ -24,6 +26,7 @@
 #pragma once
 
 #include "InfoView.h"
+#include "MatchPanel.h"
 #include "NavigatorBar.h"
 #include "PalettePanel.h"
 #include "Panels.h"
@@ -53,6 +56,9 @@ namespace chordzimmer
         void showKeyboard (bool shown);
         void showPerformance (bool shown);
         bool performanceShown() const noexcept { return performance.isVisible(); }
+        void showMatch (bool shown);
+        bool matchShown() const noexcept { return match.isVisible(); }
+        ui::MatchPanel& getMatch() noexcept { return match; }
         ui::TimelinePanel& getTimeline() noexcept { return timeline; }
         ui::PalettePanel& getPalette() noexcept { return palette; }
         ui::NavigatorBar& getNavigator() noexcept { return navigator; }
@@ -84,7 +90,9 @@ namespace chordzimmer
         void paletteMoved();               // the navigator changed: rebuild, save
         void undo();
         void redo();
-        void placePerformance();
+        void placePopover (juce::Component&, int width, int height);
+        void updateMatch();
+        void placeMatch();
 
         ChordZimmerProcessor& processor;
         ui::LookAndFeel lookAndFeel;
@@ -97,6 +105,7 @@ namespace chordzimmer
         ui::PalettePanel palette;
         ui::NavigatorBar navigator;
         ui::PerformancePanel performance;
+        ui::MatchPanel match;
         ui::OutputKeyboard outputKeys;
         ui::InfoView info;
         bool sizeRestored = false;      // until then, resized() leaves the saved size alone

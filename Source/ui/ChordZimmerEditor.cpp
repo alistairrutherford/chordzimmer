@@ -12,12 +12,13 @@ namespace chordzimmer
     ChordZimmerEditor::ChordZimmerEditor (ChordZimmerProcessor& p)
         : AudioProcessorEditor (p), processor (p), bindings (p.state),
           topBar (p, bindings, [this] (bool shown) { showKeyboard (shown); }),
-          transport (p, bindings), timeline (p, bindings), palette (p), navigator (bindings, nav), performance (p, bindings), outputKeys (p)
+          transport (p, bindings), timeline (p, bindings), palette (p), navigator (bindings, nav), performance (p, bindings), match (p, bindings), outputKeys (p)
     {
         setLookAndFeel (&lookAndFeel);
         for (auto* c : std::initializer_list<juce::Component*> { &topBar, &transport, &timeline, &palette, &navigator, &outputKeys, &info })
             addAndMakeVisible (c);
         addChildComponent (performance);
+        addChildComponent (match);
         addMouseListener (this, true);   // hovering over any child updates the Info View
         setWantsKeyboardFocus (true);
 
@@ -47,6 +48,9 @@ namespace chordzimmer
         // Wiring.
         navigator.onChange = [this] { paletteMoved(); };
         navigator.onPerformance = [this] { showPerformance (! performance.isVisible()); };
+        navigator.onMatch = [this] { showMatch (! match.isVisible()); };
+        match.onSet = [this] (const ProgressionChord& c) { timeline.replaceSelectedChord (c); };
+        match.onAdd = [this] (const ProgressionChord& c) { timeline.addChord (c); };
         palette.onAdd = [this] (const ProgressionChord& c) { timeline.addChord (c); };
         palette.onAddAsSection = [this] (const ProgressionChord& c) { timeline.addChordAsSection (c); };
         transport.onUndo = [this] { undo(); };
@@ -84,22 +88,58 @@ namespace chordzimmer
 
     void ChordZimmerEditor::showPerformance (bool shown)
     {
+        if (shown && match.isVisible())
+            showMatch (false);
         performance.setVisible (shown);
         navigator.setPerformanceShown (shown);
         if (shown)
         {
-            placePerformance();
+            placePopover (performance, ui::PerformancePanel::preferredWidth(), ui::PerformancePanel::preferredHeight());
             performance.toFront (false);
         }
     }
 
-    void ChordZimmerEditor::placePerformance()
+    void ChordZimmerEditor::showMatch (bool shown)
+    {
+        if (shown && performance.isVisible())
+            showPerformance (false);
+        match.setVisible (shown);
+        navigator.setMatchShown (shown);
+        if (shown)
+        {
+            placeMatch();
+            match.toFront (false);
+        }
+        updateMatch();
+    }
+
+    void ChordZimmerEditor::placePopover (juce::Component& c, int width, int height)
     {
         // Above the footer, at its right, over the palette.
-        const int w = juce::jmin (ui::PerformancePanel::preferredWidth(), getWidth() - 24);
-        const int h = ui::PerformancePanel::preferredHeight();
+        const int w = juce::jmin (width, getWidth() - 24);
         const auto anchor = navigator.getBounds();
-        performance.setBounds (anchor.getRight() - w, anchor.getY() - h - 6, w, h);
+        c.setBounds (anchor.getRight() - w, anchor.getY() - height - 6, w, height);
+    }
+
+    void ChordZimmerEditor::placeMatch()
+    {
+        // Over the transport and the timeline, the editor's width: the palette stays in view.
+        match.setBounds (transport.getX(), transport.getY() - 4, transport.getWidth(), ui::MatchPanel::preferredHeight());
+    }
+
+    // The Match popover's notes, against the palette shown; its ranks on the palette.
+    void ChordZimmerEditor::updateMatch()
+    {
+        std::vector<std::pair<int, int>> ranks;
+        if (match.isVisible())
+            for (const auto& m : match.getMatches())
+                if (m.fifths == 0)
+                    ranks.push_back ({ m.cell.variant * numPaletteColumns + m.cell.degree, m.rank });
+        palette.setMatchRanks (ranks, match.isVisible() && ! match.noteSet().empty());
+        const auto& prog = timeline.progression();
+        const auto* target = prog.chord (timeline.selectedChord());
+        match.setSetTarget (target == nullptr ? juce::String()
+                                              : juce::String::fromUTF8 (timelineChordLabel (*target, nav.homeKey, nav.homeScale).name.c_str()));
     }
 
     void ChordZimmerEditor::paletteMoved()
@@ -145,7 +185,9 @@ namespace chordzimmer
         r.removeFromBottom (10);
         palette.setBounds (r);
         if (performance.isVisible())
-            placePerformance();
+            placePopover (performance, ui::PerformancePanel::preferredWidth(), ui::PerformancePanel::preferredHeight());
+        if (match.isVisible())
+            placeMatch();
 
         if (sizeRestored)
         {
@@ -178,6 +220,8 @@ namespace chordzimmer
         {
             if (performance.isVisible())
                 showPerformance (false);
+            else if (match.isVisible())
+                showMatch (false);
             else
                 timeline.setSelection ({});
             return true;
@@ -213,6 +257,8 @@ namespace chordzimmer
                 key = control->getParamId();
             else if (c == &performance)
                 key = performance.infoKeyAt (performance.getLocalPoint (this, p));
+            else if (c == &match)
+                key = match.infoKeyAt (match.getLocalPoint (this, p));
             else
                 key = c->getComponentID();
             if (ui::InfoView::has (key))
@@ -248,13 +294,17 @@ namespace chordzimmer
 
     void ChordZimmerEditor::mouseDown (const juce::MouseEvent& e)
     {
-        // A click outside the popover (and its button, and any menu it opened) closes it.
-        if (! performance.isVisible() || e.eventComponent == nullptr)
-            return;
+        // A click outside a popover (and its button, and any menu it opened) closes it. The
+        // Match popover stays open over clicks in the palette and the timeline, which it works
+        // with (hearing a ranked chord, selecting the chord Set replaces).
         const auto* c = e.eventComponent;
-        if (c == &performance || performance.isParentOf (c) || c == &navigator.performance || ! isParentOf (c))
+        if (c == nullptr || ! isParentOf (c))
             return;
-        showPerformance (false);
+        if (performance.isVisible() && c != &performance && ! performance.isParentOf (c) && c != &navigator.performance)
+            showPerformance (false);
+        const bool matchWorksWith = c == &palette || palette.isParentOf (c) || c == &timeline || timeline.isParentOf (c);
+        if (match.isVisible() && c != &match && ! match.isParentOf (c) && c != &navigator.match && ! matchWorksWith)
+            showMatch (false);
     }
 
     void ChordZimmerEditor::mouseExit (const juce::MouseEvent& e)
@@ -288,6 +338,11 @@ namespace chordzimmer
 
         timeline.refresh (m);
         performance.refresh (m);
+        if (match.isVisible())
+        {
+            match.refresh (m, { nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale });
+            updateMatch();
+        }
         outputKeys.refresh (m);
         transport.setUndoState (processor.undoState());
 

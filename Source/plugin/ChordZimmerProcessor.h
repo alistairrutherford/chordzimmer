@@ -218,6 +218,12 @@ namespace chordzimmer
         bool applyDetect();
         void cancelDetect();             // Detect = Off; the next capture starts empty
 
+        // Listen (PLAN.md §3.4, Phase 5; message thread): the notes collected while the Listen
+        // parameter is on (NoteCollector.h), with their lengths; and Clear (the next block
+        // starts again).
+        const CollectedNotes& collectedNotes();
+        void clearCollectedNotes();
+
         // While Test workspace is on, the workspace is loaded from this file whenever it changes
         // (Phase 2, for the bridge's checks in Live): line n is pattern n (A-D) as a progression
         // (ChordSets.h), in the current Key; a blank or unreadable line is an empty pattern, and
@@ -284,6 +290,9 @@ namespace chordzimmer
         ChordDisplay lastDisplay;
         SnapshotExchange<HeardChords> heard;    // audio thread → message thread
         HeardChords heardScratch, heardCache;    // the audio thread's copy; the message thread's
+        SnapshotExchange<CollectedNotes> collected { CollectedNotes {} };   // audio thread → message thread (~6 KB)
+        std::unique_ptr<CollectedNotes> collectedScratch = std::make_unique<CollectedNotes>(),   // the audio thread's copy
+                                        collectedCache = std::make_unique<CollectedNotes>();     // the message thread's
 
         ExportRecorder recorder;
         bool writeTake (const juce::File& file, juce::String& error) const;

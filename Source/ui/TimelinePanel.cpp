@@ -179,6 +179,24 @@ namespace chordzimmer::ui
         return did;
     }
 
+    ChordRef TimelinePanel::selectedChord() const noexcept
+    {
+        return selected.chords.empty() ? ChordRef {} : selected.chords.front();
+    }
+
+    bool TimelinePanel::replaceSelectedChord (const ProgressionChord& c)
+    {
+        const ChordRef r = selectedChord();
+        if (! model.valid (r) || c.chord.empty())
+            return false;
+        return edit ("Set chord", [&] (ChordProgression& q, Selection&)
+        {
+            const bool notes = q.replaceChord (r, c.chord);
+            const bool b = q.setBass (r, c.bass);
+            return notes || b;
+        });
+    }
+
     bool TimelinePanel::copySelection()
     {
         if (selected.empty())

@@ -49,6 +49,24 @@ namespace chordzimmer::ui
             { "ui.mode", "Mode", "The palette's mode: the parallel modes of its family on the same tonic (C Ionian, C Dorian …)." },
             { "display.dial", "Circle of fifths", "Home in amber, the palette's key lit, the way between them drawn. Click a key to move the palette there." },
             { "ui.performance", "Performance", "Opens how the chords play: strum, velocity, voicing, octave, and what notes played in do." },
+            { "ui.match", "Match", "Opens Match: play or pick notes to see the palette chords that fit them, or make a chord of them." },
+
+            // ---- The Match popover -----------------------------------------------------------
+            { "card.notes", "Notes", "The notes to match: what Listen heard, or the notes picked on the strip (picked ones win)." },
+            { "listen", "Listen", "On: notes played in (keys or a clip) pass through and are kept, with their lengths, for Match. No chords meanwhile." },
+            { "ui.matchBars", "Last", "How much of what was heard counts: the last 1 to 16 bars of playing (silence after doesn't count)." },
+            { "ui.matchUseHeard", "Use heard", "Copies the notes heard onto the strip as picked notes, to add or take some away." },
+            { "ui.matchClear", "Clear", "Forgets the notes heard and the notes picked." },
+            { "display.picker", "Note picker", "Click keys to pick notes (amber). Teal shows how long each note was heard." },
+            { "card.matches", "Matches", "The palette chords that fit the notes best, ranked. Their ranks also show on the palette." },
+            { "ui.matchWide", "Wider", "On: also searches the palettes two fifths either side of this one (borrowed chords, marked with an arrow)." },
+            { "display.matches", "Matches", "The best chords for the notes: long notes on the root and 3rd count most, clashes count against. Click to hear, double-click to add." },
+            { "card.fromNotes", "Chord from notes", "The notes as one chord, any notes at all, on the root you choose." },
+            { "ui.fromNotesRoot", "Root", "The chord's root. Auto: the one its name suggests." },
+            { "ui.fromNotesBass", "Bass", "A bass note under the chord (a slash chord), or none." },
+            { "display.fromNotes", "Chord", "The chord the notes make, named, with its numeral in the home key." },
+            { "ui.fromNotesSet", "Set", "Replaces the selected timeline chord with this one (its length stays)." },
+            { "ui.fromNotesAdd", "Add", "Puts this chord into the timeline at the insertion marker." },
 
             // ---- The performance popover -----------------------------------------------------
             { "card.strum", "Strum", "The chord's notes start one after another instead of together." },

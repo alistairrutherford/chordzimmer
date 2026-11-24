@@ -23,6 +23,7 @@
         <FILE id="snF012" name="TimelinePanel.cpp" compile="1" resource="0" file="../../Source/ui/TimelinePanel.cpp"/>
         <FILE id="snF013" name="PalettePanel.cpp" compile="1" resource="0" file="../../Source/ui/PalettePanel.cpp"/>
         <FILE id="snF014" name="NavigatorBar.cpp" compile="1" resource="0" file="../../Source/ui/NavigatorBar.cpp"/>
+        <FILE id="snF015" name="MatchPanel.cpp" compile="1" resource="0" file="../../Source/ui/MatchPanel.cpp"/>
     </GROUP>
     <GROUP id="snRes" name="Fonts">
         <FILE id="snR000" name="Inter-Regular.ttf" compile="0" resource="1" file="../../Resources/Fonts/Inter-Regular.ttf"/>

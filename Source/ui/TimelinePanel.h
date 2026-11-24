@@ -57,6 +57,8 @@ namespace chordzimmer::ui
         bool addChordAsSection (const ProgressionChord&);                // a new section at the end
         bool dropChordAt (const ProgressionChord&, float x);             // a palette drop
         bool deleteSelection();
+        bool replaceSelectedChord (const ProgressionChord&);             // Chord-from-notes Set (its notes and bass)
+        ChordRef selectedChord() const noexcept;                         // the first selected chord on its own, else invalid
         bool copySelection();
         bool cutSelection();
         bool paste();                                                    // at the marker

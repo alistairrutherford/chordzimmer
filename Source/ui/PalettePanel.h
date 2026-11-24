@@ -13,6 +13,8 @@
 //
 // Click to hear a cell (until the mouse is let go); drag it onto the timeline; double-click to
 // add it at the timeline's insertion marker; right-click to add it there or as a new section.
+// While the Match popover is open (MatchPanel.h), the matched cells carry their rank and the
+// others fade.
 #pragma once
 
 #include "Keyboards.h"
@@ -37,6 +39,13 @@ namespace chordzimmer::ui
         // The chord the timeline sounds (its pitch classes and root; 0 / -1 for none) and the
         // playhead's beat (for the pulse).
         void setSounding (unsigned pitchClasses, int root, double playhead);
+
+        // Match (PLAN.md §3.4, §5.1, Phase 5): ranked cells get an amber rank badge and the rest
+        // fade to 30 %, while `active`.
+        // Each pair is (variant × numPaletteColumns + degree, rank).
+        void setMatchRanks (const std::vector<std::pair<int, int>>& cellRanks, bool active);
+        int matchRank (int variant, int degree) const noexcept;   // 0: none
+        bool matchShown() const noexcept { return matchActive; }
 
         // Rows: `firstRow` is the bottom one shown (a variant index, 0 = "5").
         int firstRow() const noexcept { return bottomRow; }
@@ -90,6 +99,8 @@ namespace chordzimmer::ui
         unsigned soundingPcs = 0;
         int soundingRoot = -1;
         float pulse = 0.0f;
+        std::array<std::array<int8_t, numPaletteColumns>, numTierVariants> ranks {};
+        bool matchActive = false;
 
         static constexpr int padding = 10, titleHeight = 18, headerHeight = 30, labelWidth = 52, scrollWidth = 6;
     };

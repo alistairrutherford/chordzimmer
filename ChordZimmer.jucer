@@ -24,6 +24,7 @@
         <FILE id="czF101" name="PaletteTiers.h" compile="0" resource="0" file="Source/core/theory/PaletteTiers.h"/>
         <FILE id="czF102" name="PaletteBuilder.h" compile="0" resource="0" file="Source/core/theory/PaletteBuilder.h"/>
         <FILE id="czF103" name="CircleOfFifths.h" compile="0" resource="0" file="Source/core/theory/CircleOfFifths.h"/>
+        <FILE id="czF104" name="Matcher.h" compile="0" resource="0" file="Source/core/theory/Matcher.h"/>
       </GROUP>
       <GROUP id="csGrp1" name="core/engine">
         <FILE id="ccF101" name="ChordEngine.h" compile="0" resource="0" file="Source/core/engine/ChordEngine.h"/>
@@ -35,6 +36,7 @@
         <FILE id="csF007" name="VoiceTracker.h" compile="0" resource="0" file="Source/core/engine/VoiceTracker.h"/>
         <FILE id="csF008" name="TestPattern.h" compile="0" resource="0" file="Source/core/engine/TestPattern.h"/>
         <FILE id="czF301" name="ProgressionPlayer.h" compile="0" resource="0" file="Source/core/engine/ProgressionPlayer.h"/>
+        <FILE id="czF302" name="NoteCollector.h" compile="0" resource="0" file="Source/core/engine/NoteCollector.h"/>
         <FILE id="csF024" name="SnapshotExchange.h" compile="0" resource="0" file="Source/core/engine/SnapshotExchange.h"/>
         <FILE id="csF027" name="Clock.h" compile="0" resource="0" file="Source/core/engine/Clock.h"/>
         <FILE id="csF028" name="EventQueue.h" compile="0" resource="0" file="Source/core/engine/EventQueue.h"/>
@@ -54,6 +56,7 @@
         <FILE id="czF201" name="Progression.h" compile="0" resource="0" file="Source/core/model/Progression.h"/>
         <FILE id="czF202" name="UndoList.h" compile="0" resource="0" file="Source/core/model/UndoList.h"/>
         <FILE id="czF203" name="TimelineLayout.h" compile="0" resource="0" file="Source/core/model/TimelineLayout.h"/>
+        <FILE id="czF204" name="ChordFromNotes.h" compile="0" resource="0" file="Source/core/model/ChordFromNotes.h"/>
       </GROUP>
       <GROUP id="csGrp4" name="core/midiio">
         <FILE id="csF052" name="MidiFile.h" compile="0" resource="0" file="Source/core/midiio/MidiFile.h"/>
@@ -88,6 +91,8 @@
         <FILE id="czF404" name="PalettePanel.cpp" compile="1" resource="0" file="Source/ui/PalettePanel.cpp"/>
         <FILE id="czF405" name="NavigatorBar.h" compile="0" resource="0" file="Source/ui/NavigatorBar.h"/>
         <FILE id="czF406" name="NavigatorBar.cpp" compile="1" resource="0" file="Source/ui/NavigatorBar.cpp"/>
+        <FILE id="czF501" name="MatchPanel.h" compile="0" resource="0" file="Source/ui/MatchPanel.h"/>
+        <FILE id="czF502" name="MatchPanel.cpp" compile="1" resource="0" file="Source/ui/MatchPanel.cpp"/>
         <FILE id="cmF900" name="InfoView.h" compile="0" resource="0" file="Source/ui/InfoView.h"/>
         <FILE id="cmF901" name="InfoView.cpp" compile="1" resource="0" file="Source/ui/InfoView.cpp"/>
       </GROUP>

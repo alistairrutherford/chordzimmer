@@ -101,7 +101,9 @@ namespace chordzimmer::ui
         performance.setComponentID ("ui.performance");
         performance.setClickingTogglesState (false);
         performance.onClick = [this] { if (onPerformance) onPerformance(); };
-        for (auto* c : std::initializer_list<juce::Component*> { &key, &scale, &home, &down, &up, &mode, &dial, &performance })
+        match.setComponentID ("ui.match");
+        match.onClick = [this] { if (onMatch) onMatch(); };
+        for (auto* c : std::initializer_list<juce::Component*> { &key, &scale, &home, &down, &up, &mode, &dial, &match, &performance })
             addAndMakeVisible (c);
         refresh();
     }
@@ -156,6 +158,7 @@ namespace chordzimmer::ui
     }
 
     void NavigatorBar::setPerformanceShown (bool shown) { performance.setToggleState (shown, juce::dontSendNotification); }
+    void NavigatorBar::setMatchShown (bool shown) { match.setToggleState (shown, juce::dontSendNotification); }
 
     void NavigatorBar::paint (juce::Graphics& g)
     {
@@ -185,14 +188,16 @@ namespace chordzimmer::ui
             r.removeFromLeft (after);
         };
         place (key, 42 + 60, 6);
-        place (scale, juce::jlimit (120, 170, getWidth() / 6), 16);
+        place (scale, juce::jlimit (108, 170, getWidth() / 6), 16);
         place (home, 30, 6);
         place (down, 28, 2);
         keyLabel = r.removeFromLeft (46);
         r.removeFromLeft (2);
         place (up, 28, 8);
-        place (mode, juce::jlimit (118, 160, getWidth() / 6), 10);
+        place (mode, juce::jlimit (100, 160, getWidth() / 6), 10);
         dial.setBounds (r.removeFromLeft (r.getHeight() + 4).withSizeKeepingCentre (r.getHeight() + 2, r.getHeight() + 2));
-        performance.setBounds (r.removeFromRight (112).withSizeKeepingCentre (112, juce::jmin (r.getHeight(), 28)));
+        performance.setBounds (r.removeFromRight (100).withSizeKeepingCentre (100, juce::jmin (r.getHeight(), 28)));
+        r.removeFromRight (6);
+        match.setBounds (r.removeFromRight (68).withSizeKeepingCentre (68, juce::jmin (r.getHeight(), 28)));
     }
 }

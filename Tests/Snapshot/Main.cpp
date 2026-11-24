@@ -31,6 +31,10 @@
 //   8. Detect      captured chords go on the end of the timeline as "Detected", one undo step
 //   9. real time   no allocation in processBlock while Preview plays and the editor edits the
 //                  timeline between blocks (a malloc hook counts the audio thread's allocations)
+//  10. Match       (Phase 5) Listen through processBlock (the input passes through, no
+//                  allocation), the matches and the palette's rank badges, the note picker,
+//                  ±2 fifths, Chord from notes' Add and Set, Clear, one popover at a time,
+//                  Listen not saved; the editor-match snapshot
 //
 //   ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -341,9 +345,10 @@ static void testSnapshots (const juce::File& fixtures, const juce::File& out, bo
                              small ? ChordZimmerEditor::minHeight : ChordZimmerEditor::defaultHeight);
             editor->showKeyboard (! small);
             juce::StringArray found, unreachable;
-            for (const bool popover : { false, true })
+            for (const int popover : { 0, 1, 2 })   // none, Performance, Match
             {
-                editor->showPerformance (popover);
+                editor->showPerformance (popover == 1);
+                editor->showMatch (popover == 2);
                 editor->refreshNow();
                 for (int y = 0; y < editor->getHeight(); y += 2)
                     for (int x = 0; x < editor->getWidth(); x += 2)
@@ -359,6 +364,7 @@ static void testSnapshots (const juce::File& fixtures, const juce::File& out, bo
                    "the strip runs along the bottom and isn't itself something to point at");
         }
         editor->showPerformance (false);
+        editor->showMatch (false);
         editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
         editor->showKeyboard (true);
         editor->refreshNow();
@@ -775,6 +781,112 @@ static void testRealTime()
     closeEditor (*p, editor);
 }
 
+//==============================================================================
+// 10: Match and Chord-from-notes (Phase 5).
+
+static void testMatch (const juce::File& fixtures, const juce::File& out, bool update)
+{
+    std::cout << "== Match ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    p->setProgression (song());
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->showKeyboard (true);
+    editor->refreshNow();
+    auto& match = editor->getMatch();
+    auto& palette = editor->getPalette();
+
+    editor->showMatch (true);
+    check (editor->matchShown() && ! editor->performanceShown(), "Match opens its popover");
+    editor->showPerformance (true);
+    check (! editor->matchShown() && editor->performanceShown(), "Performance closes it: one popover at a time");
+    editor->showMatch (true);
+
+    // Listen: G B D F, a beat each (120 BPM, no host: the engine's own clock), through processBlock.
+    set (*p, params::listen, 1.0f);
+    block (*p);
+    const int notes[] = { 67, 71, 74, 77 };
+    const int blocksPerBeat = 47;          // 24000 samples / 512
+    std::vector<int> passed;
+    int allocations = 0;
+    juce::AudioBuffer<float> audio (2, 512);
+    juce::MidiBuffer midi;
+    midi.ensureSize (4096);
+    for (int i = 0; i < 4; ++i)
+        for (int b = 0; b < blocksPerBeat; ++b)
+        {
+            midi.clear();
+            if (b == 0)
+                midi.addEvent (juce::MidiMessage::noteOn (1, notes[i], (juce::uint8) 90), 0);
+            if (b == blocksPerBeat - 4)
+                midi.addEvent (juce::MidiMessage::noteOff (1, notes[i]), 0);
+            const auto before = allocCount.load();
+            {
+                AllocWatch watch;
+                p->processBlock (audio, midi);
+            }
+            allocations += allocCount.load() - before;
+            for (const auto m : midi)
+                if (m.getMessage().isNoteOn())
+                    passed.push_back (m.getMessage().getNoteNumber());
+        }
+    editor->refreshNow();
+    check (passed == std::vector<int> { 67, 71, 74, 77 } && allocations == 0, "Listen: the melody passes through, no chords, no allocation in processBlock");
+    const auto& ms = match.getMatches();
+    check (! ms.empty() && ms.front().cell.name == "G7" && ms.front().rank == 1, "the best match is G7 (" + juce::String (ms.empty() ? "-" : ms.front().cell.name) + ")");
+    check (palette.matchShown() && palette.matchRank (5, 4) == 1, "the palette shows rank 1 on G7 (the 7 row, V)");
+    check (match.noteSet().weight[7] > 0.8 && match.noteSet().weight[7] < 1.0 && match.noteSet().bass == 7, "the notes heard: about 0.9 beats each, G the bass");
+    check (match.fromNotesName().startsWith ("G7"), "Chord from notes: G7 (" + match.fromNotesName() + ")");
+    snapshot (*editor, "editor-match", fixtures, out, update);
+
+    // Add puts it in at the marker; Set replaces the selected chord.
+    auto& t = editor->getTimeline();
+    t.setSelection (Selection::chord (0, 1));
+    editor->refreshNow();
+    check (match.set.isEnabled(), "with a chord selected, Set is enabled");
+    match.set.onClick();
+    check (layout (p->getProgression()).startsWith ("Verse[C:4 G7:4 F:4") && p->undoState().undoLabel == "Set chord",
+           "Set replaces the Verse's Am with G7, keeping its length (" + layout (p->getProgression()).substring (0, 24) + ")");
+    match.add.onClick();
+    check (layout (p->getProgression()).startsWith ("Verse[C:4 G7:4 G7:4 F:4") && p->undoState().undoLabel == "Add chord", "Add puts another after it, at the marker");
+
+    // The picker: picked notes win over heard ones.
+    match.picker.setPicked ((1u << 2) | (1u << 5) | (1u << 9));    // D F A
+    editor->refreshNow();
+    check (! match.getMatches().empty() && match.getMatches().front().cell.name == "Dm" && match.fromNotesName().startsWith ("Dm"),
+           "picking D F A: Dm, and Chord from notes is Dm");
+    match.root.setSelectedId (5 + 2, juce::sendNotificationSync);   // F
+    check (match.fromNotesChord().root() == 5, "a root of F builds it on F (" + match.fromNotesName() + ")");
+    match.root.setSelectedId (1, juce::sendNotificationSync);
+    match.picker.setPicked ((1u << 10) | (1u << 2) | (1u << 5));   // Bb D F
+    editor->refreshNow();
+    const auto narrow = match.getMatches().front().cell.name;
+    match.wide.setToggleState (true, juce::sendNotificationSync);
+    match.wide.onClick();
+    check (match.getMatches().front().cell.name == "Bb" && match.getMatches().front().fifths == -1 && narrow != "Bb",
+           "Bb D F: with ±2 fifths, Bb from the F palette (" + narrow + " without)");
+
+    // Clear forgets both.
+    match.clear.onClick();
+    block (*p);
+    editor->refreshNow();
+    check (match.noteSet().empty() && match.getMatches().empty() && ! palette.matchShown(), "Clear: no notes, no matches, the palette unfaded");
+
+    // Listen isn't saved (like Analyse).
+    juce::MemoryBlock state;
+    p->getStateInformation (state);
+    auto restored = std::make_unique<ChordZimmerProcessor>();
+    restored->setStateInformation (state.getData(), (int) state.getSize());
+    check (get (*p, params::listen) > 0.5f && get (*restored, params::listen) < 0.5f && ! params::isPresetParameter (params::listen),
+           "Listen isn't saved with the state, nor in presets");
+    set (*p, params::listen, 0.0f);
+    editor->showMatch (false);
+    check (! palette.matchShown(), "closing Match unfades the palette");
+    closeEditor (*p, editor);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -796,6 +908,7 @@ int main (int argc, char** argv)
     testUndoAndState();
     testDetect();
     testRealTime();
+    testMatch (fixtures, out, update);
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;

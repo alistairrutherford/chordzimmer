@@ -81,7 +81,12 @@ namespace chordzimmer::params
     inline constexpr const char* loop          = "loop";
     inline constexpr const char* startBar      = "startBar";
 
-    constexpr int numParameters = 26;
+    // Match (appended; PLAN.md §3.4, §3.8, Phase 5): Listen collects the notes played in (the
+    // input passes through, no chords) for Match and Chord-from-notes. Not in presets, not saved,
+    // like Analyse.
+    inline constexpr const char* listen        = "listen";
+
+    constexpr int numParameters = 27;
 
     // A Chordism preset's tree, made ChordZimmer's: the Progression value becomes a choice
     // (Chordism's Custom: Diatonic). The other kept values mean the same.
@@ -107,6 +112,7 @@ namespace chordzimmer::params
         AnalyseMode analyseMode() const noexcept;
         DetectMode detectMode() const noexcept;
         bool testWorkspace() const noexcept;
+        bool listening() const noexcept;          // Listen (Phase 5)
 
     private:
         std::atomic<float>* enable;
@@ -125,6 +131,7 @@ namespace chordzimmer::params
         std::atomic<float>* syncModeParam;
         std::atomic<float>* loopParam;
         std::atomic<float>* startBarParam;
+        std::atomic<float>* listenParam;
 
         std::atomic<float>* fxStack;
         std::atomic<float>* fxStrum;

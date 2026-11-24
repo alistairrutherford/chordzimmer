@@ -13,6 +13,8 @@
 //   Enable off    → input passes through unchanged
 //   Analyse       → input passes through unchanged and the KeyListener guesses its key
 //                   (ChordChimp's docs/KEY_DETECTION_PLAN.md); no chords, no test pattern
+//   Listen        → input passes through unchanged and the NoteCollector keeps its notes and
+//                   lengths for Match and Chord-from-notes (ChordZimmer Phase 5)
 //   Detect        → Capture: as Analyse, and the ChordListener groups the input into chords on
 //                   the beat grid (ChordListener.h; ChordMonkey's PLAN.md §3.6) for the plug-in
 //                   to write into a pattern (core/model/Detect.h)
@@ -48,6 +50,7 @@
 #include "KeyListener.h"
 #include "KeyMap.h"
 #include "MidiEvents.h"
+#include "NoteCollector.h"
 #include "ProgressionPlayer.h"
 #include "TestPattern.h"
 #include "Transport.h"
@@ -71,6 +74,7 @@ namespace chordzimmer
         bool testPattern = false;
         bool analysing = false;           // Analyse is Listen or Use guess (key detection)
         bool capturing = false;           // Detect is Capture or Use result (Phase 8)
+        bool collecting = false;          // Listen: the notes are collected for Match (ChordZimmer Phase 5)
         bool play = false;                // Play: the timeline plays (Phase 3)
         SyncMode sync = SyncMode::Sync;   // Sync mode (Phase 3)
         bool loop = true;                 // Loop: the loop region repeats (Phase 3)
@@ -79,8 +83,8 @@ namespace chordzimmer
         int outputChannel = 0;            // 0..15
         ChordFxSettings fx;
 
-        // Analyse or Detect: the input passes through and is listened to; no chords play.
-        bool listening() const noexcept { return analysing || capturing; }
+        // Analyse, Detect or Listen: the input passes through and is listened to; no chords play.
+        bool listening() const noexcept { return analysing || capturing || collecting; }
     };
 
     // A chord auditioned from the editor (PLAN.md §3.1): its notes at Chord Octave 0
@@ -137,6 +141,8 @@ namespace chordzimmer
 
             if (resetRequested.exchange (false))
                 releaseAll (0, out);
+            if (collectedResetRequested.exchange (false))
+                noteCollector.reset();
             if (heardResetRequested.exchange (false))
             {
                 chordListener.reset();
@@ -247,6 +253,8 @@ namespace chordzimmer
                 listener.advance (seconds);
             if (current.capturing)
                 chordListener.advanceTo (listenBeats);
+            if (current.collecting)
+                noteCollector.advanceTo (listenBeats);
         }
 
         // All notes off now (bypass, transport stop, all-notes-off, destruction).
@@ -259,6 +267,7 @@ namespace chordzimmer
             previewEnd = -1;
             listener.allUp (timeAt (sample));
             chordListener.allUp (beatAt (sample));
+            noteCollector.allUp (beatAt (sample));
             refreshChords (sample, nullptr);
         }
 
@@ -295,6 +304,12 @@ namespace chordzimmer
         // The next process() starts a new capture (and key guess, unless Analyse is on): for
         // the plug-in, once a result is used or a capture cancelled. Any thread.
         void requestHeardReset() noexcept { heardResetRequested.store (true); }
+
+        // The notes Listen collected (PLAN.md §3.4, NoteCollector.h), whether they changed since
+        // the last call (audio thread), and a request to start again (any thread).
+        void getCollected (CollectedNotes& out) const noexcept { noteCollector.snapshot (out); }
+        bool takeCollectedChanged() noexcept { return noteCollector.takeChanged(); }
+        void requestCollectedReset() noexcept { collectedResetRequested.store (true); }
 
         // For the editor: input key `note` is down; a performance of key `note` is playing, held
         // or not.
@@ -438,13 +453,15 @@ namespace chordzimmer
                 currentPattern = s.pattern < 0 ? 0 : (s.pattern >= numPatterns ? numPatterns - 1 : s.pattern);
             settingsSeen = true;
 
-            if (s.enabled != old.enabled || s.analysing != old.analysing || s.capturing != old.capturing)
+            if (s.enabled != old.enabled || s.analysing != old.analysing || s.capturing != old.capturing || s.collecting != old.collecting)
             {
                 releaseAll (0, out);
                 if (s.listening() && ! old.listening())
                     listener.reset();     // each analysis starts afresh
                 if (s.capturing && ! old.capturing)
                     chordListener.reset();   // and each capture
+                if (s.collecting && ! old.collecting)
+                    noteCollector.reset();   // and each Listen
                 performer.applySettings (s.fx, s.outputChannel, {}, 0, out);
                 return;
             }
@@ -508,6 +525,8 @@ namespace chordzimmer
                         listener.noteOn (n, h.velocity, timeAt (sample));
                     if (current.capturing)
                         chordListener.noteOn (n, timeAt (sample), beatAt (sample));
+                    if (current.collecting)
+                        noteCollector.noteOn (n, beatAt (sample));
                 }
                 else if (e.origin == MidiEvent::fromWorkspace)
                     pressPatternSlot (n, n - MidiEvent::workspaceKey, sample, out);
@@ -567,6 +586,8 @@ namespace chordzimmer
                     listener.noteOff (n, timeAt (sample));
                 if (current.capturing)
                     chordListener.noteOff (n, beatAt (sample));
+                if (current.collecting)
+                    noteCollector.noteOff (n, beatAt (sample));
             }
             else if (h.slot >= 0)
                 performer.release (n, sample, out);   // ends, or is held (Hold)
@@ -604,8 +625,9 @@ namespace chordzimmer
         bool wasPlaying = false;
         KeyListener listener;
         ChordListener chordListener;
+        NoteCollector noteCollector;
         double seconds = 0.0, secondsPerSample = 1.0 / 44100.0, listenBeats = 0.0;
-        std::atomic<bool> resetRequested { false }, heardResetRequested { false };
+        std::atomic<bool> resetRequested { false }, heardResetRequested { false }, collectedResetRequested { false };
         ChordPerformer performer { voices, clock, chords, extraChords, extraRoots, context };
     };
 }

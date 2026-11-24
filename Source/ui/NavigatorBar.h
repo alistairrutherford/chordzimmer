@@ -8,6 +8,7 @@
 //   mode ▾            the parallel modes of the palette's family on the same tonic
 //   dial              the circle of fifths: 12 dots, home in amber, the palette's key lit, the
 //                     arc between them; click a dot to go there
+//   Match             opens PLAN.md §3.4's popover (MatchPanel.h)
 //   Performance       opens PLAN.md §3.6's popover (Panels.h, PerformancePanel)
 //
 // The palette position (CircleOfFifths.h) is UI state saved with the plug-in, not a parameter;
@@ -49,8 +50,9 @@ namespace chordzimmer::ui
         void pickKey (int pitchClass);
 
         std::function<void()> onChange;
-        std::function<void()> onPerformance;
+        std::function<void()> onPerformance, onMatch;
         void setPerformanceShown (bool);
+        void setMatchShown (bool);
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -59,7 +61,7 @@ namespace chordzimmer::ui
         IconButton home, down, up;
         juce::ComboBox mode;
         FifthsDial dial;
-        juce::TextButton performance { "Performance" };
+        juce::TextButton performance { "Performance" }, match { "Match" };
 
     private:
         CircleOfFifths& nav;

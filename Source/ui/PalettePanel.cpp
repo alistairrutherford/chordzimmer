@@ -47,6 +47,27 @@ namespace chordzimmer::ui
         repaint();
     }
 
+    void PalettePanel::setMatchRanks (const std::vector<std::pair<int, int>>& list, bool active)
+    {
+        std::array<std::array<int8_t, numPaletteColumns>, numTierVariants> next {};
+        for (const auto& [cellIndex, rank] : list)
+        {
+            const int v = cellIndex / numPaletteColumns, d = cellIndex % numPaletteColumns;
+            if (v >= 0 && v < numTierVariants && rank > 0 && rank < 100)
+                next[(size_t) v][(size_t) d] = (int8_t) rank;
+        }
+        if (next == ranks && active == matchActive)
+            return;
+        ranks = next;
+        matchActive = active;
+        repaint();
+    }
+
+    int PalettePanel::matchRank (int v, int d) const noexcept
+    {
+        return v >= 0 && v < numTierVariants && d >= 0 && d < numPaletteColumns ? ranks[(size_t) v][(size_t) d] : 0;
+    }
+
     //==========================================================================
     // Geometry.
 
@@ -228,6 +249,10 @@ namespace chordzimmer::ui
                     orb = orb.withSizeKeepingCentre (orb.getWidth() * 1.06f, orb.getHeight() * 1.06f);
                 const float glow = lit ? night::glowIdle + (night::glowPlay - night::glowIdle) * pulse
                                        : (hover || down ? night::glowHover : night::glowIdle * 0.6f);
+                const int rank = matchActive ? matchRank (v, d) : 0;
+                const bool faded = matchActive && rank == 0;
+                if (faded)
+                    g.beginTransparencyLayer (0.3f);
                 drawChordOrb (g, orb, c.family, c.inKey, glow, orb.getHeight() * 0.5f);
                 if (lit || down)
                 {
@@ -245,6 +270,18 @@ namespace chordzimmer::ui
                 g.setColour (darkInk ? night::bgTop.withAlpha (0.65f) : (c.inKey ? night::text.withAlpha (0.75f) : night::textDim));
                 g.setFont (font (juce::jlimit (9.5f, 11.5f, orb.getHeight() * 0.24f)));
                 g.drawFittedText (juce::String::fromUTF8 (c.numeral.c_str()), text.toNearestInt(), juce::Justification::centredTop, 1, 0.6f);
+                if (faded)
+                    g.endTransparencyLayer();
+                if (rank > 0)
+                {
+                    // The match's rank: an amber badge on the orb's top-left (PLAN.md §5.1).
+                    const auto badge = juce::Rectangle<float> (16.0f, 16.0f).withCentre (orb.getTopLeft().translated (6.0f, 3.0f));
+                    g.setColour (night::accent);
+                    g.fillEllipse (badge);
+                    g.setColour (night::bgTop);
+                    g.setFont (font (10.0f, true));
+                    g.drawText (juce::String (rank), badge, juce::Justification::centred);
+                }
             }
         }
 

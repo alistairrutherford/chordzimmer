@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased: Phase 5, Match and Chord-from-notes
+
+PLAN.md §6, Phase 5; §3.4.
+
+- **Match** (the footer's Match button): a popover over the transport and timeline, so the
+  palette stays in view.
+  - **Listen** (a new parameter, appended; not saved, not in presets): notes played in, from the
+    keys or a clip, pass through and are kept with their lengths. *Last* picks how much counts
+    (1–16 bars of playing; a silence afterwards doesn't push it away). *Use heard* copies them to
+    the picker, *Clear* forgets them.
+  - **Note picker:** a one-octave strip of 12 keys; teal shows how long each note was heard,
+    amber the notes picked. Picked notes, if any, are what's matched; else what was heard.
+  - **Matches:** the 8 palette chords that fit best, ranked (`core/theory/Matcher.h`): long notes
+    on the root and 3rd count most, a note a semitone above a chord tone counts against, and each
+    colour tone (7th, 9th …) has a small cost, so passing notes don't pull in extended chords.
+    Ties: in key before borrowed, then the lower tier. *±2 fifths* also searches the palettes two
+    fifths either side. Click a chip to hear it, double-click to add it. The palette shows the
+    ranks on its orbs and fades the rest while Match is open.
+  - **Chord from notes:** the notes as one chord on a root (*Auto*: the one its name suggests)
+    and an optional bass, named for any set of notes (C7#9, Fm(maj7), C(b9), Cadd9/D …). *Set*
+    replaces the selected timeline chord (keeping its length), *Add* puts it in at the marker.
+- Tests: `test_matcher` (melodies, scoring and ties, borrowing, all 12 keys, the note window,
+  Listen through the engine, chords from every set of notes); the snapshot test checks Match
+  through `processBlock` (no allocation), the palette's ranks, Set and Add, and Listen not
+  being saved, with a new reference image (`editor-match`).
+
 ## Unreleased: Phase 4, the editor
 
 The palette, the key navigator and the timeline (PLAN.md §6, Phase 4; §3.1–§3.3, §5).

@@ -64,7 +64,7 @@ namespace chordzimmer::params
 
     bool isPresetParameter (const juce::String& paramId)
     {
-        for (const char* excluded : { enable, testPattern, keyOctave, analyse, detect, play, testWorkspace, syncMode, loop, startBar })
+        for (const char* excluded : { enable, testPattern, keyOctave, analyse, detect, play, testWorkspace, syncMode, loop, startBar, listen })
             if (paramId == excluded)
                 return false;
         return true;
@@ -143,6 +143,9 @@ namespace chordzimmer::params
                                                             names (numSyncModes, [] (int i) { return syncModeName ((SyncMode) i); }), 0));
         layout.add (std::make_unique<AudioParameterBool> (id (loop), "Loop", true));
         layout.add (std::make_unique<AudioParameterInt> (id (startBar), "Start bar", 1, maxStartBar, 1));
+
+        // ChordZimmer Phase 5: Listen (NoteCollector.h). Appended, never reordered.
+        layout.add (std::make_unique<AudioParameterBool> (id (listen), "Listen", false));
         return layout;
     }
 
@@ -163,6 +166,7 @@ namespace chordzimmer::params
           syncModeParam (state.getRawParameterValue (params::syncMode)),
           loopParam (state.getRawParameterValue (params::loop)),
           startBarParam (state.getRawParameterValue (params::startBar)),
+          listenParam (state.getRawParameterValue (params::listen)),
           fxStack (state.getRawParameterValue (params::stack)),
           fxStrum (state.getRawParameterValue (params::strum)),
           fxStrumRate (state.getRawParameterValue (params::strumRate)),
@@ -175,7 +179,7 @@ namespace chordzimmer::params
           fxBass (state.getRawParameterValue (params::bass))
     {
         jassert (enable && keyParam && scale && group && chordOctave && testPattern && progression && keyOctaveParam && analyseParam
-                 && playParam && patternParam && testWorkspaceParam && detectParam && syncModeParam && loopParam && startBarParam);
+                 && playParam && patternParam && testWorkspaceParam && detectParam && syncModeParam && loopParam && startBarParam && listenParam);
         jassert (fxStack && fxStrum && fxStrumRate && fxVelocity && fxVelocityPeak && fxVelocityRange && fxHold && fxVoiceLeading
                  && fxVoicing && fxBass);
     }
@@ -210,6 +214,7 @@ namespace chordzimmer::params
     DetectMode Snapshot::detectMode() const noexcept { return (DetectMode) choice (detectParam, 3); }
 
     bool Snapshot::testWorkspace() const noexcept { return on (testWorkspaceParam); }
+    bool Snapshot::listening() const noexcept { return on (listenParam); }
 
     int Snapshot::key() const noexcept { return juce::jlimit (0, numKeys - 1, whole (keyParam)); }
 
@@ -227,6 +232,7 @@ namespace chordzimmer::params
         s.followKeyOctave = choice (keyOctaveParam, 2) == 1;
         s.analysing = analyseMode() != AnalyseMode::Off;
         s.capturing = detectMode() != DetectMode::Off;
+        s.collecting = listening();
         s.play = on (playParam);
         s.sync = (SyncMode) choice (syncModeParam, numSyncModes);
         s.loop = on (loopParam);

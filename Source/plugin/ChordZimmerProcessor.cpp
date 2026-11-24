@@ -24,6 +24,7 @@ namespace chordzimmer
         {
             tree.removeChild (tree.getChildWithProperty ("id", params::analyse), nullptr);
             tree.removeChild (tree.getChildWithProperty ("id", params::detect), nullptr);
+            tree.removeChild (tree.getChildWithProperty ("id", params::listen), nullptr);
         }
 
         const char* analyseName (params::AnalyseMode m)
@@ -214,6 +215,11 @@ namespace chordzimmer
         publishNoteStates();
         lastChordSlot.store (engine.getLastChordSlot(), std::memory_order_relaxed);
         keyGuess.store (engine.getKeyGuess().pack(), std::memory_order_relaxed);
+        if (engine.takeCollectedChanged())
+        {
+            engine.getCollected (*collectedScratch);
+            collected.publish (*collectedScratch);
+        }
         if (engine.takeHeardChanged())
         {
             engine.getHeard (heardScratch);
@@ -327,6 +333,19 @@ namespace chordzimmer
 
     //==========================================================================
     // Detect.
+
+    const CollectedNotes& ChordZimmerProcessor::collectedNotes()
+    {
+        if (collected.hasNew())
+            *collectedCache = collected.read();
+        return *collectedCache;
+    }
+
+    void ChordZimmerProcessor::clearCollectedNotes()
+    {
+        engine.requestCollectedReset();
+        *collectedCache = {};
+    }
 
     const HeardChords& ChordZimmerProcessor::heardChords()
     {
