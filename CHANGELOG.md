@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: Phase 2, progression model
+
+Core and state only (PLAN.md §6, Phase 2); the timeline UI is Phase 4 and playback Phase 3.
+
+- **Progression** (PLAN.md §3.3, `core/model/Progression.h`): `ChordProgression`, a list of named,
+  coloured sections (8 hues) of chords. A chord is a `WorkspaceChord` (root + voiced tones) with
+  bass, inversion, octave and a duration in ticks (96 to a beat; default a bar). Palette cells
+  become chords with the same notes (`progressionChordFromCell`).
+- **Edits:** insert a palette chord on empty space, into a section at a point, or between two
+  sections; resize a chord or a whole section (its chords scale) with snap (off, 1/16 … 1 bar,
+  default 1/8); move; duplicate anywhere, including Alt-duplicate in place between sections;
+  multi-select delete; copy and paste at the insertion marker; inversion, octave, bass, replace;
+  rename, recolour and delete sections. Queries: length, the chord at a beat, the range of a
+  selection (the whole progression when nothing is selected).
+- **Undo** (`core/model/UndoList.h`): every edit undoable and redoable, 100 steps.
+- **Saved** with the plug-in state (so with the Live set) and in presets, as a versioned one-line
+  text (`czp1 …`) in a `PROGRESSION` element; damaged or unknown text loads as an empty
+  progression. States and presets from before have none and load empty.
+- Tests: `test_progression`.
+
 ## Unreleased: Phase 1, palette theory
 
 Core only (PLAN.md §6, Phase 1); the editor doesn't use it yet (Phase 4).

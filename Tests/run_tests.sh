@@ -47,6 +47,7 @@ compile_and_run test_detect
 compile_and_run test_substitutes
 compile_and_run test_palette
 compile_and_run test_navigator
+compile_and_run test_progression
 
 echo ""
 echo "All test binaries passed."

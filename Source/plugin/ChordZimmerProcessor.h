@@ -25,6 +25,7 @@
 #include "../core/engine/ChordEngine.h"
 #include "../core/engine/SnapshotExchange.h"
 #include "../core/midiio/ExportRecorder.h"
+#include "../core/model/Progression.h"
 #include "../core/model/Workspace.h"
 #include "../core/midiio/PatternRender.h"
 #include "Parameters.h"
@@ -120,10 +121,23 @@ namespace chordzimmer
         static juce::ValueTree workspaceToTree (const Workspace&);
         static Workspace workspaceFromTree (const juce::ValueTree&);
 
+        // The progression (PLAN.md §3.3): sections of chords. Not parameters; saved with the state
+        // and in presets, next to the workspace. Any thread except the audio thread (a lock); the
+        // audio thread doesn't use it until Phase 3, which hands it over through a
+        // SnapshotExchange. A change the host should save marks the state changed. The editor's
+        // undo history (UndoList.h) arrives with the timeline in Phase 4.
+        ChordProgression getProgression() const;
+        void setProgression (const ChordProgression&);
+
+        // The progression as the state and presets save it (progressionToText in a PROGRESSION
+        // child), and back: missing or unreadable text comes back empty.
+        static juce::ValueTree progressionToTree (const ChordProgression&);
+        static ChordProgression progressionFromTree (const juce::ValueTree&);
+
         //==========================================================================
         // Presets (message thread). applyPreset sets every preset parameter (the preset's value,
-        // or the default if it has none), replaces the workspace if the preset has one (Phase 5),
-        // and ends every note. presetState holds the workspace too.
+        // or the default if it has none), replaces the workspace and the progression if the
+        // preset has them, and ends every note. presetState holds both too.
         PresetManager presets { *this };
         void applyPreset (const juce::ValueTree& preset, const juce::String& category, const juce::String& name);
         juce::ValueTree presetState();
@@ -246,6 +260,8 @@ namespace chordzimmer
         mutable juce::CriticalSection workspaceLock;
         Workspace workspace;
         SnapshotExchange<Workspace> workspaceForAudio;   // written under workspaceLock
+        mutable juce::CriticalSection progressionLock;
+        ChordProgression progression;
         std::atomic<int> currentProgram { 0 }, pendingProgram { -1 };
         void loadProgram (int index);
 

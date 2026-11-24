@@ -567,6 +567,8 @@ namespace chordzimmer
         }
         if (const auto ws = tree.getChildWithName ("WORKSPACE"); ws.isValid())
             setWorkspace (workspaceFromTree (ws));
+        if (const auto pg = tree.getChildWithName ("PROGRESSION"); pg.isValid())
+            setProgression (progressionFromTree (pg));
         engine.requestReset();            // all notes off on a preset change (Chordism §5)
         setPresetIdentity (category, name);
     }
@@ -578,6 +580,7 @@ namespace chordzimmer
             if (child.hasType ("PARAM") && params::isPresetParameter (child.getProperty ("id").toString()))
                 tree.appendChild (child.createCopy(), nullptr);
         tree.appendChild (workspaceToTree (getWorkspace()), nullptr);
+        tree.appendChild (progressionToTree (getProgression()), nullptr);
         tree.setProperty ("version", JucePlugin_VersionString, nullptr);
         return tree;
     }
@@ -714,12 +717,52 @@ namespace chordzimmer
         return w;
     }
 
+    //==========================================================================
+    // The progression (PLAN.md §3.3), saved as its text (Progression.h):
+    //
+    //   <PROGRESSION text="czp1 S:0:Verse C:0:0.4.7:384:0:0:-1 …"/>
+    //
+    // The text carries its own version, so the element has none.
+
+    ChordProgression ChordZimmerProcessor::getProgression() const
+    {
+        const juce::ScopedLock sl (progressionLock);
+        return progression;
+    }
+
+    void ChordZimmerProcessor::setProgression (const ChordProgression& p)
+    {
+        {
+            const juce::ScopedLock sl (progressionLock);
+            if (progression == p)
+                return;
+            progression = p;
+        }
+        notifyStateChanged();
+    }
+
+    juce::ValueTree ChordZimmerProcessor::progressionToTree (const ChordProgression& p)
+    {
+        juce::ValueTree tree ("PROGRESSION");
+        tree.setProperty ("text", juce::String (progressionToText (p)), nullptr);
+        return tree;
+    }
+
+    ChordProgression ChordZimmerProcessor::progressionFromTree (const juce::ValueTree& tree)
+    {
+        ChordProgression p;
+        if (tree.hasType ("PROGRESSION"))
+            progressionFromText (tree.getProperty ("text").toString().toStdString(), p);
+        return p;
+    }
+
     void ChordZimmerProcessor::getStateInformation (juce::MemoryBlock& destData)
     {
         auto tree = state.copyState();
         dropAnalyse (tree);
         tree.appendChild (uiState.createCopy(), nullptr);
         tree.appendChild (workspaceToTree (getWorkspace()), nullptr);
+        tree.appendChild (progressionToTree (getProgression()), nullptr);
         tree.setProperty ("program", currentProgram.load(), nullptr);
         tree.setProperty ("presetName", presetName, nullptr);
         tree.setProperty ("presetCategory", presetCategory, nullptr);
@@ -755,6 +798,14 @@ namespace chordzimmer
             workspaceForAudio.publish (workspace);
         }
         tree.removeChild (ws, nullptr);
+
+        // A state saved before Phase 2 has no progression: it restores empty.
+        const auto pg = tree.getChildWithName ("PROGRESSION");
+        {
+            const juce::ScopedLock sl (progressionLock);
+            progression = progressionFromTree (pg);
+        }
+        tree.removeChild (pg, nullptr);
         dropNonFiniteValues (tree);
         dropAnalyse (tree);
 
