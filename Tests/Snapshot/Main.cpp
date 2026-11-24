@@ -1,0 +1,802 @@
+// Editor snapshot test (PLAN.md §6 Phase 4, §7; ChordMonkey's Tests/Snapshot brought back for the
+// new editor). Runs the real processor and editor without a host and checks:
+//
+//   1. snapshots   the editor in a fixed state (C major; Verse, Chorus, Bridge; the Chorus
+//                  selected as the loop region; the playhead in the Verse) at the default size
+//                  (1000 x 640), the smallest (760 x 600, keyboard hidden) and a large one
+//                  (1200 x 800), the palette borrowing (a fifth down, Mixolydian), the
+//                  performance popover open, and the Info View pointing at a palette chord. Each
+//                  is compared with Tests/fixtures/snapshot/*.png (at most 0.5 % of pixels may
+//                  differ by more than 24 levels: font rendering moves a little between macOS
+//                  versions)
+//   2. reachable   every host parameter has a control (the performance popover's included) but
+//                  the test rig (Test pattern, Test workspace) and Pattern (the retired
+//                  workspace's, PLAN.md §2)
+//   3. Info View   every parameter has a brief entry; everything described can be pointed at
+//                  (default and smallest size, the popover open and closed)
+//   4. timeline    scripted mouse gestures on the real panel (PLAN.md §6 Phase 4): palette
+//                  double-clicks and a palette drop, a chord's and a section's edge dragged, a
+//                  chord moved into another section, a section Alt-dragged to the end, clicks
+//                  and Shift-clicks (the loop region follows), the keys (Delete, Cmd-C/V at the
+//                  marker, Cmd-D, ← →, Cmd-Z, Shift-Cmd-Z, Space, L), the menus' actions, every
+//                  edit one undo step
+//   5. palette     a click sounds the cell's chord through processBlock until let go; the
+//                  navigator (◀ ▶, Home, mode, the dial) rebuilds it; Key carries it along; its
+//                  position is saved in the UI state
+//   6. undo        the processor's history: reset by a restore and by a preset with a
+//                  progression, kept by one without; not saved
+//   7. state       parameters, the UI's preferences (palette position, snap, zoom) and the
+//                  progression restore into a new instance without reporting a change; the editor
+//                  reopens at its saved size
+//   8. Detect      captured chords go on the end of the timeline as "Detected", one undo step
+//   9. real time   no allocation in processBlock while Preview plays and the editor edits the
+//                  timeline between blocks (a malloc hook counts the audio thread's allocations)
+//
+//   ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
+#include <juce_audio_processors/juce_audio_processors.h>
+#include "../../Source/plugin/ChordZimmerProcessor.h"
+#include "../../Source/ui/ChordZimmerEditor.h"
+#include "../../Source/core/model/ChordSets.h"
+#include <iostream>
+#include <pthread.h>
+
+using namespace chordzimmer;
+
+// Every allocation the watched thread makes (malloc, realloc, new: libmalloc's logger hook sees
+// them all). Only a pthread_t compare inside: the hook runs within malloc.
+extern "C" void (*malloc_logger) (uint32_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uint32_t);
+
+namespace
+{
+    std::atomic<pthread_t> allocWatched { nullptr };
+    std::atomic<int> allocCount { 0 };
+
+    void allocLogger (uint32_t type, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uint32_t)
+    {
+        if ((type & 2) != 0 && allocWatched.load (std::memory_order_relaxed) == pthread_self())   // 2: an allocation
+            allocCount.fetch_add (1, std::memory_order_relaxed);
+    }
+
+    struct AllocWatch
+    {
+        AllocWatch() { malloc_logger = allocLogger; allocWatched = pthread_self(); }
+        ~AllocWatch() { allocWatched = nullptr; }
+    };
+
+    int failures = 0;
+    bool comparePixels = true;
+
+    // Records whether the processor told the host its non-parameter state changed.
+    struct StateWatch : juce::AudioProcessorListener
+    {
+        bool changed = false;
+        void audioProcessorParameterChanged (juce::AudioProcessor*, int, float) override {}
+        void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails& d) override { changed |= d.nonParameterStateChanged; }
+    };
+
+    void check (bool ok, const juce::String& what)
+    {
+        std::cout << (ok ? "  PASS  " : "  FAIL  ") << what << std::endl;
+        failures += ok ? 0 : 1;
+    }
+
+    void set (ChordZimmerProcessor& p, const juce::String& id, float plain)
+    {
+        auto* param = p.state.getParameter (id);
+        jassert (param != nullptr);
+        param->setValueNotifyingHost (param->convertTo0to1 (plain));
+    }
+
+    float get (ChordZimmerProcessor& p, const juce::String& id) { return p.state.getRawParameterValue (id)->load(); }
+
+    // A block of the processor with these MIDI events at sample 0; returns its output.
+    juce::MidiBuffer block (ChordZimmerProcessor& p, std::initializer_list<juce::MidiMessage> events = {})
+    {
+        juce::AudioBuffer<float> audio (2, 512);
+        juce::MidiBuffer midi;
+        for (const auto& e : events)
+            midi.addEvent (e, 0);
+        p.processBlock (audio, midi);
+        return midi;
+    }
+
+    std::vector<int> noteOns (const juce::MidiBuffer& midi)
+    {
+        std::vector<int> n;
+        for (const auto m : midi)
+            if (m.getMessage().isNoteOn())
+                n.push_back (m.getMessage().getNoteNumber());
+        std::sort (n.begin(), n.end());
+        return n;
+    }
+
+    int noteOffs (const juce::MidiBuffer& midi)
+    {
+        int n = 0;
+        for (const auto m : midi)
+            n += m.getMessage().isNoteOff() ? 1 : 0;
+        return n;
+    }
+
+    void runTimers (int ms = 60) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); }
+
+    // A mouse event on `c` at `at` (component coordinates).
+    juce::MouseEvent mouse (juce::Component& c, juce::Point<float> at, juce::ModifierKeys mods = juce::ModifierKeys::leftButtonModifier,
+                            int clicks = 1, juce::Point<float> downAt = { -1.0f, -1.0f })
+    {
+        auto source = juce::Desktop::getInstance().getMainMouseSource();
+        const auto now = juce::Time::getCurrentTime();
+        return juce::MouseEvent (source, at, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, now, downAt.x < 0.0f ? at : downAt, now, clicks,
+                                 downAt.x >= 0.0f && downAt != at);
+    }
+
+    // Press at `from`, drag through to `to` in steps, release there.
+    void dragMouse (juce::Component& c, juce::Point<float> from, juce::Point<float> to, juce::ModifierKeys mods = juce::ModifierKeys::leftButtonModifier)
+    {
+        c.mouseDown (mouse (c, from, mods));
+        for (int i = 1; i <= 8; ++i)
+            c.mouseDrag (mouse (c, from + (to - from) * ((float) i / 8.0f), mods, 1, from));
+        c.mouseUp (mouse (c, to, mods.withoutMouseButtons(), 1, from));
+    }
+
+    void click (juce::Component& c, juce::Point<float> at, juce::ModifierKeys mods = juce::ModifierKeys::leftButtonModifier)
+    {
+        c.mouseDown (mouse (c, at, mods));
+        c.mouseUp (mouse (c, at, mods.withoutMouseButtons()));
+    }
+
+    juce::KeyPress key (int code, juce::ModifierKeys mods = {}, juce::juce_wchar ch = 0) { return juce::KeyPress (code, mods, ch); }
+    const juce::ModifierKeys cmd { juce::ModifierKeys::commandModifier };
+
+    // "Verse[C:4 Am:4] Chorus[F:2]": names in the home key, lengths in beats.
+    juce::String layout (const ChordProgression& p, int key = 0, Scale scale = Scale::Major)
+    {
+        juce::StringArray parts;
+        for (const auto& s : p.sections)
+        {
+            juce::StringArray chords;
+            for (const auto& c : s.chords)
+                chords.add (juce::String (timelineChordLabel (c, key, scale).name) + ":" + juce::String (c.beats()).trimCharactersAtEnd ("0").trimCharactersAtEnd ("."));
+            parts.add (juce::String::fromUTF8 (s.name.c_str()) + "[" + chords.joinIntoString (" ") + "]");
+        }
+        return parts.joinIntoString (" ");
+    }
+
+    juce::String selText (const Selection& sel)
+    {
+        juce::StringArray s;
+        for (int x : sel.sections)
+            s.add ("S" + juce::String (x));
+        for (auto c : sel.chords)
+            s.add (juce::String (c.section) + "." + juce::String (c.index));
+        return s.isEmpty() ? "-" : s.joinIntoString (" ");
+    }
+
+    // A section from numerals in C ("I vi IV:2 V:2"), through ChordSets' parser.
+    ProgressionSection sectionOf (const char* name, const char* numerals, int colour)
+    {
+        Pattern pattern;
+        std::string error;
+        parseProgression (numerals, 0, pattern, error);
+        auto p = progressionFromPattern (pattern, name);
+        p.sections[0].colour = (uint8_t) colour;
+        return p.sections[0];
+    }
+
+    ChordProgression song()
+    {
+        ChordProgression p;
+        p.sections.push_back (sectionOf ("Verse", "I vi IV V", 0));
+        p.sections.push_back (sectionOf ("Chorus", "IV V iii:2 vi:2 ii7:2 V7:2", 2));
+        p.sections.push_back (sectionOf ("Bridge", "bVI bVII I:8", 3));
+        return p;
+    }
+
+    // Fraction of pixels that differ by more than `tolerance` in any channel (1 if sizes differ).
+    double difference (const juce::Image& a, const juce::Image& b, int tolerance)
+    {
+        if (a.getWidth() != b.getWidth() || a.getHeight() != b.getHeight())
+            return 1.0;
+        const juce::Image::BitmapData da (a, juce::Image::BitmapData::readOnly), db (b, juce::Image::BitmapData::readOnly);
+        long differing = 0;
+        for (int y = 0; y < a.getHeight(); ++y)
+            for (int x = 0; x < a.getWidth(); ++x)
+            {
+                const auto ca = da.getPixelColour (x, y), cb = db.getPixelColour (x, y);
+                const int d = juce::jmax (std::abs (ca.getRed() - cb.getRed()), std::abs (ca.getGreen() - cb.getGreen()),
+                                          std::abs (ca.getBlue() - cb.getBlue()));
+                differing += d > tolerance ? 1 : 0;
+            }
+        return (double) differing / ((double) a.getWidth() * a.getHeight());
+    }
+
+    void snapshot (ChordZimmerEditor& editor, const juce::String& name, const juce::File& fixtures, const juce::File& out, bool update,
+                   std::function<void()> beforeRender = {})
+    {
+        editor.refreshNow();
+        if (beforeRender)
+            beforeRender();
+        const auto image = editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f);
+        const auto write = [&image] (const juce::File& f)
+        {
+            f.deleteFile();
+            juce::FileOutputStream s (f);
+            juce::PNGImageFormat().writeImageToStream (image, s);
+        };
+        write (out.getChildFile (name + ".png"));
+
+        const auto reference = fixtures.getChildFile (name + ".png");
+        if (! comparePixels)
+        {
+            check (image.isValid() && image.getWidth() == editor.getWidth(), name + ": rendered (pixels not compared)");
+            return;
+        }
+        if (update || ! reference.existsAsFile())
+        {
+            write (reference);
+            check (true, name + ": reference written (" + reference.getFullPathName() + ")");
+            return;
+        }
+        const double d = difference (image, juce::ImageFileFormat::loadFrom (reference), 24);
+        check (d <= 0.005, name + ": " + juce::String (d * 100.0, 3) + "% of pixels differ from the reference");
+    }
+
+    std::unique_ptr<ChordZimmerEditor> openEditor (ChordZimmerProcessor& p)
+    {
+        return std::unique_ptr<ChordZimmerEditor> (dynamic_cast<ChordZimmerEditor*> (p.createEditor()));
+    }
+
+    // Closes an editor as a host does: JUCE wants editorBeingDeleted() before the delete.
+    template <class E>
+    void closeEditor (juce::AudioProcessor& p, std::unique_ptr<E>& e)
+    {
+        p.editorBeingDeleted (e.get());
+        e.reset();
+    }
+
+    bool exempt (const juce::String& id)
+    {
+        return id == params::testPattern || id == params::testWorkspace || id == params::pattern;
+    }
+}
+
+//==============================================================================
+// 1-3: snapshots, reachability, the Info View.
+
+static void testSnapshots (const juce::File& fixtures, const juce::File& out, bool update)
+{
+    std::cout << "== snapshots ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    p->setProgression (song());
+    auto editor = openEditor (*p);
+    check (editor != nullptr, "the editor opens");
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->showKeyboard (true);
+    editor->refreshNow();
+    editor->getTimeline().setSelection (Selection::section (1));
+
+    // The playhead in the Verse's IV, as the processor would publish it while playing.
+    const auto playing = [&]
+    {
+        p->playhead = 9.25;
+        p->playingChord = 2;
+    };
+    playing();
+    snapshot (*editor, "editor", fixtures, out, update, playing);
+    editor->setSize (ChordZimmerEditor::minWidth, ChordZimmerEditor::minHeight);
+    editor->showKeyboard (false);
+    snapshot (*editor, "editor-small", fixtures, out, update, playing);
+    editor->showKeyboard (true);
+    editor->setSize (1200, 800);
+    snapshot (*editor, "editor-large", fixtures, out, update, playing);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+
+    // Borrowing: a fifth down (F), Mixolydian.
+    auto& nav = editor->getNavigator();
+    nav.stepFifth (-1);
+    nav.setMode (Scale::Mixolydian);
+    p->playhead = -1.0;
+    p->playingChord = -1;
+    snapshot (*editor, "editor-borrowed", fixtures, out, update);
+    nav.goHome();
+
+    editor->showPerformance (true);
+    snapshot (*editor, "editor-performance", fixtures, out, update);
+
+    std::cout << "== every parameter reachable ==\n";
+    juce::StringArray missing;
+    int total = 0;
+    for (auto* param : p->getParameters())
+        if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
+        {
+            ++total;
+            if (editor->boundParameters().count (withId->paramID) == 0 && ! exempt (withId->paramID))
+                missing.add (withId->paramID);
+        }
+    check (total == params::numParameters && missing.isEmpty(),
+           juce::String (total) + " parameters, " + juce::String (missing.size()) + " without a control (the test rig is Live's; Pattern is retired)"
+               + (missing.isEmpty() ? juce::String() : ": " + missing.joinIntoString (", ")));
+
+    std::cout << "== Info View ==\n";
+    {
+        juce::StringArray noEntry, tooLong;
+        for (auto* param : p->getParameters())
+            if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
+                if (ui::InfoView::titleFor (withId->paramID).isEmpty() || ui::InfoView::textFor (withId->paramID).isEmpty())
+                    noEntry.add (withId->paramID);
+        for (const auto& k : ui::InfoView::keys())
+            if (ui::InfoView::textFor (k).length() > 200 || ui::InfoView::titleFor (k).length() > 24)
+                tooLong.add (k);
+        check (noEntry.isEmpty(), "every parameter has an Info View entry" + (noEntry.isEmpty() ? juce::String() : ": none for " + noEntry.joinIntoString (", ")));
+        check (tooLong.isEmpty(), "entries stay brief (titles at most 24 characters, text at most 200)"
+                                      + (tooLong.isEmpty() ? juce::String() : ": " + tooLong.joinIntoString (", ")));
+
+        // Everything in the table can be pointed at, with the popover open and closed, at the
+        // default size and the smallest (keyboard hidden there).
+        for (const bool small : { false, true })
+        {
+            editor->setSize (small ? ChordZimmerEditor::minWidth : ChordZimmerEditor::defaultWidth,
+                             small ? ChordZimmerEditor::minHeight : ChordZimmerEditor::defaultHeight);
+            editor->showKeyboard (! small);
+            juce::StringArray found, unreachable;
+            for (const bool popover : { false, true })
+            {
+                editor->showPerformance (popover);
+                editor->refreshNow();
+                for (int y = 0; y < editor->getHeight(); y += 2)
+                    for (int x = 0; x < editor->getWidth(); x += 2)
+                        found.addIfNotAlreadyThere (editor->infoKeyAt ({ x, y }));
+            }
+            for (const auto& k : ui::InfoView::keys())
+                if (! found.contains (k) && ! exempt (k) && ! (small && k == "display.keyboard"))
+                    unreachable.add (k);
+            const auto strip = editor->infoView().getBounds();
+            check (unreachable.isEmpty(), juce::String (small ? "smallest size" : "default size") + ": everything described can be pointed at ("
+                                              + juce::String (found.size() - 1) + " keys)" + (unreachable.isEmpty() ? juce::String() : "; not: " + unreachable.joinIntoString (", ")));
+            check (strip.getBottom() == editor->getHeight() - 10 && strip.getWidth() == editor->getWidth() - 24 && editor->infoKeyAt (strip.getCentre()).isEmpty(),
+                   "the strip runs along the bottom and isn't itself something to point at");
+        }
+        editor->showPerformance (false);
+        editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+        editor->showKeyboard (true);
+        editor->refreshNow();
+
+        // Pointing at a palette chord shows what it is; leaving the editor shows the hint.
+        auto& palette = editor->getPalette();
+        const ui::PalettePanel::CellRef v7 { 5, 4 };     // the "7" row, degree V: G7
+        const auto at = palette.cellBounds (v7).getCentre();
+        palette.mouseMove (mouse (palette, at));
+        editor->showInfoAt (editor->getLocalPoint (&palette, at.toInt()));
+        check (editor->infoView().shownKey() == "display.palette" && editor->infoView().shownText().startsWith ("G7 (V7): G B D F. In the home key."),
+               "pointing at G7 in the palette names it, its numeral and notes (" + editor->infoView().shownText().substring (0, 40) + ")");
+        snapshot (*editor, "editor-info", fixtures, out, update);
+        palette.mouseExit (mouse (palette, { -5.0f, -5.0f }));
+        const juce::MouseEvent away = mouse (*editor, { -5.0f, -5.0f });
+        editor->mouseExit (away);
+        check (editor->infoView().shownKey().isEmpty() && editor->infoView().shownText() == ui::InfoView::hint(), "leaving the editor shows the hint");
+    }
+    closeEditor (*p, editor);
+}
+
+//==============================================================================
+// 4: the timeline's gestures.
+
+static void testTimeline()
+{
+    std::cout << "== timeline gestures ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->refreshNow();
+    auto& t = editor->getTimeline();
+    auto& palette = editor->getPalette();
+    const auto cellAt = [&] (int variant, int degree) { return palette.cellBounds ({ variant, degree }).getCentre(); };
+    const int triad = 3;
+    const auto now = [&] { return layout (p->getProgression()); };
+
+    // Double-clicks in the palette add at the marker, each after the last.
+    for (int degree : { 0, 5, 3, 4 })
+        palette.mouseDoubleClick (mouse (palette, cellAt (triad, degree), juce::ModifierKeys::leftButtonModifier, 2));
+    editor->refreshNow();
+    check (now() == "Section 1[C:4 Am:4 F:4 G:4]" && selText (t.selection()) == "0.3",
+           "four double-clicks in the palette (I vi IV V): Section 1, each after the last, the last selected (" + now() + ")");
+    check (p->undoState().canUndo && p->undoState().undoLabel == "Add chord", "each is an undo step (\"Add chord\")");
+
+    // A palette chord dropped past the end: a new section.
+    {
+        ProgressionChord dm = progressionChordFromCell (*palette.cell ({ triad, 1 }));
+        const juce::var desc = ui::TimelinePanel::chordDragDescription (dm);
+        const auto end = t.chordBounds ({ 0, 3 }).getRight() + 40.0f;
+        juce::DragAndDropTarget::SourceDetails details (desc, &palette, { (int) end, (int) t.chordArea().getCentreY() });
+        check (t.isInterestedInDragSource (details), "the timeline takes a palette chord's drag");
+        t.itemDragMove (details);
+        t.itemDropped (details);
+        check (now() == "Section 1[C:4 Am:4 F:4 G:4] Section 2[Dm:4]", "Dm dropped on empty space: Section 2 (" + now() + ")");
+        juce::DragAndDropTarget::SourceDetails other (juce::var ("something else"), &palette, { 10, 10 });
+        check (! t.isInterestedInDragSource (other), "other drags are refused");
+    }
+
+    // Drag G's right edge 2 beats right (snap 1/8): 6 beats.
+    const float ppb = (float) t.pixelsPerBeat();
+    auto g = t.chordBounds ({ 0, 3 });
+    dragMouse (t, { g.getRight() - 1.0f, g.getCentreY() }, { g.getRight() - 1.0f + 2.0f * ppb + 3.0f, g.getCentreY() });
+    check (now() == "Section 1[C:4 Am:4 F:4 G:6] Section 2[Dm:4]" && p->undoState().undoLabel == "Resize chord",
+           "G's right edge dragged 2 beats: 6 beats, one undo step (" + now() + ")");
+
+    // Section 1's tab edge dragged to half its length: every chord halves.
+    auto tab = t.tabBounds (0);
+    dragMouse (t, { tab.getRight() - 1.0f, tab.getCentreY() }, { tab.getX() + tab.getWidth() * 0.5f, tab.getCentreY() });
+    check (now() == "Section 1[C:2 Am:2 F:2 G:3] Section 2[Dm:4]" && p->undoState().undoLabel == "Resize section",
+           "Section 1's edge dragged to half: its chords scale (" + now() + ")");
+    editor->keyPressed (key ('z', cmd, 'z'));
+    check (now() == "Section 1[C:4 Am:4 F:4 G:6] Section 2[Dm:4]", "Cmd-Z undoes it");
+    editor->keyPressed (key ('z', cmd.withFlags (juce::ModifierKeys::shiftModifier), 'Z'));
+    check (now() == "Section 1[C:2 Am:2 F:2 G:3] Section 2[Dm:4]", "Shift-Cmd-Z redoes it");
+
+    // Drag Am into Section 2, after Dm (with nothing selected first: a drag moves the whole
+    // selection, and the edge drag selected Section 1).
+    t.setSelection ({});
+    auto am = t.chordBounds ({ 0, 1 });
+    auto dm = t.chordBounds ({ 1, 0 });
+    dragMouse (t, am.getCentre(), { dm.getRight() - 3.0f, dm.getCentreY() });
+    check (now() == "Section 1[C:2 F:2 G:3] Section 2[Dm:4 Am:2]" && selText (t.selection()) == "1.1" && p->undoState().undoLabel == "Move",
+           "Am dragged onto Dm's second half: moved after it, still selected (" + now() + ")");
+    check (selText (p->getLoopSelection()) == "1.1", "the loop region follows the selection");
+
+    // Alt-drag Section 1's tab past the end: a copy last.
+    tab = t.tabBounds (0);
+    const juce::ModifierKeys alt (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::altModifier);
+    dragMouse (t, tab.getCentre(), { t.chordBounds ({ 1, 1 }).getRight() + 30.0f, tab.getCentreY() }, alt);
+    check (now() == "Section 1[C:2 F:2 G:3] Section 2[Dm:4 Am:2] Section 1[C:2 F:2 G:3]" && selText (t.selection()) == "S2"
+               && p->undoState().undoLabel == "Duplicate",
+           "Alt-drag Section 1's tab to the end: a copy there, selected (" + now() + ")");
+
+    // Clicks: one chord, Shift adds, a click on empty space clears and sets the marker.
+    click (t, t.chordBounds ({ 0, 1 }).getCentre());
+    click (t, t.chordBounds ({ 1, 0 }).getCentre(), juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::shiftModifier));
+    check (selText (t.selection()) == "0.1 1.0" && selText (p->getLoopSelection()) == "0.1 1.0", "click F, Shift-click Dm: both, the loop region too");
+    editor->refreshNow();
+    check (editor->getTransport().now.getName() == "F" && editor->getTransport().now.getNumeral() == "IV", "the transport shows the selected chord: F, IV");
+
+    // Cmd-C, a click in the gap after Section 1 (the marker), Cmd-V: a new section there.
+    editor->keyPressed (key ('c', cmd, 'c'));
+    const auto gapX = (t.tabBounds (0).getRight() + t.tabBounds (1).getX()) * 0.5f;
+    click (t, { gapX, t.chordBounds ({ 0, 0 }).getCentreY() });
+    check (t.selection().empty() && t.marker() == InsertPoint::newSection (1), "a click in a gap: nothing selected, the marker between the sections");
+    editor->keyPressed (key ('v', cmd, 'v'));
+    check (now() == "Section 1[C:2 F:2 G:3] Section 1[F:2] Section 2[Dm:4] Section 2[Dm:4 Am:2] Section 1[C:2 F:2 G:3]"
+               && p->undoState().undoLabel == "Paste",
+           "Cmd-V pastes at the marker, not the end: a section per part (" + now() + ")");
+
+    // Delete, Cmd-D, the arrows.
+    t.setSelection (Selection::section (1));
+    editor->keyPressed (key (juce::KeyPress::deleteKey));
+    editor->keyPressed (key (juce::KeyPress::rightKey));
+    check (now() == "Section 1[C:2 F:2 G:3] Section 2[Dm:4] Section 2[Dm:4 Am:2] Section 1[C:2 F:2 G:3]" && selText (t.selection()) == "0.0",
+           "Delete removes the selected section; Right from nothing selects the first chord (" + now() + ")");
+    t.setSelection (Selection::chord (2, 1));
+    editor->keyPressed (key ('d', cmd, 'd'));
+    check (now() == "Section 1[C:2 F:2 G:3] Section 2[Dm:4] Section 2[Dm:4 Am:2 Am:2] Section 1[C:2 F:2 G:3]" && selText (t.selection()) == "2.2",
+           "Cmd-D duplicates Am in place, the copy selected (" + now() + ")");
+    editor->keyPressed (key (juce::KeyPress::leftKey));
+    editor->keyPressed (key (juce::KeyPress::leftKey));
+    check (selText (t.selection()) == "2.0", "Left Left steps back two chords");
+
+    // The menus' actions.
+    check (t.setInversion ({ 0, 0 }, 1) && t.setOctave ({ 0, 0 }, -1) && t.setBass ({ 0, 1 }, 9) && t.renameSection (0, "Intro") && t.setSectionColour (0, 5),
+           "inversion, octave, bass, rename and colour each change the progression");
+    const auto edited = p->getProgression();
+    check (edited.sections[0].name == "Intro" && edited.sections[0].colour == 5 && edited.sections[0].chords[0].inversion == 1
+               && edited.sections[0].chords[0].octave == -1 && edited.sections[0].chords[1].bass == 9 && layout (edited).startsWith ("Intro[C/E:2 F/A:2"),
+           "and they show: " + layout (edited).substring (0, 30));
+    t.mouseDoubleClick (mouse (t, t.tabBounds (1).getCentre(), juce::ModifierKeys::leftButtonModifier, 2));
+    check (t.isRenaming(), "double-clicking a tab starts renaming it");
+
+    // Space and L toggle Play and Loop.
+    const bool loopWas = get (*p, params::loop) > 0.5f;
+    editor->keyPressed (key (juce::KeyPress::spaceKey, {}, ' '));
+    editor->keyPressed (key ('L', {}, 'l'));
+    check (get (*p, params::play) > 0.5f && (get (*p, params::loop) > 0.5f) != loopWas, "Space turns Play on; L toggles Loop");
+    set (*p, params::play, 0.0f);
+
+    // Snap: the transport's menu sets the timeline's, and it's saved.
+    editor->getTransport().snap.setSelectedId ((int) Snap::Bar + 1, juce::sendNotificationSync);
+    check (t.getSnap() == Snap::Bar && (int) p->uiState.getProperty ("snap", -1) == (int) Snap::Bar, "Snap Bar: the timeline snaps to bars; saved in the UI state");
+
+    // Undo all the way back, then redo all.
+    int undos = 0;
+    while (p->undoProgression())
+        ++undos;
+    editor->refreshNow();
+    check (p->getProgression().empty() && t.progression().empty() && undos == 17 && ! p->undoState().canUndo,
+           "every edit was one undo step: " + juce::String (undos) + " undo back to empty");
+    int redos = 0;
+    while (p->redoProgression())
+        ++redos;
+    editor->refreshNow();
+    check (redos == undos && layout (p->getProgression()) == layout (edited) && t.progression() == p->getProgression(), "and redo all the way forward again");
+    closeEditor (*p, editor);
+}
+
+//==============================================================================
+// 5: the palette and the navigator.
+
+static void testPalette()
+{
+    std::cout << "== palette and navigator ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->refreshNow();
+    auto& palette = editor->getPalette();
+    auto& nav = editor->getNavigator();
+
+    // A click sounds the cell (ii, Dm: D3 F3 A3) until let go.
+    const ui::PalettePanel::CellRef dm { 3, 1 };
+    const auto at = palette.cellBounds (dm).getCentre();
+    check (palette.firstRow() == 2 && palette.cellAt (at) == dm, "the triads are in view at first; the cell under the mouse is ii");
+    palette.mouseDown (mouse (palette, at));
+    const auto on = noteOns (block (*p));
+    palette.mouseUp (mouse (palette, at, {}));
+    const auto off = block (*p);
+    check (on == std::vector<int> { 50, 53, 57 } && noteOffs (off) == 3, "clicking ii sounds D F A (50 53 57) and letting go ends it");
+    check (p->getProgression().empty(), "a click adds nothing");
+
+    // Scrolling: up to the extended tiers and back.
+    palette.scrollRows (+20);
+    check (palette.firstRow() == numTierVariants - palette.visibleRows(), "scrolled to the top, the Altered tier shows");
+    palette.scrollRows (-20);
+    check (palette.firstRow() == 0, "and to the bottom, power chords and sus");
+    palette.showRow (3);
+
+    // The navigator.
+    const auto ctx = [&] { return palette.getGrid().context; };
+    nav.down.onClick();
+    check (ctx().paletteKey == 5 && ctx().paletteScale == Scale::Major && ctx().homeKey == 0 && palette.getGrid().columns[3].numeral == "bVII",
+           "Fifth down: the palette is F major; its fourth column reads bVII from C");
+    check (! palette.getGrid().rows[3].cells[3].inKey && palette.getGrid().rows[3].cells[0].inKey, "Bb is hollow (out of C), F filled");
+    check ((int) p->uiState.getProperty ("paletteFifths", 0) == -1, "the palette position is saved in the UI state");
+    nav.mode.setSelectedId ((int) Scale::Dorian + 1, juce::sendNotificationSync);
+    check (ctx().paletteKey == 5 && ctx().paletteScale == Scale::Dorian && (int) p->uiState.getProperty ("paletteScale", -1) == (int) Scale::Dorian,
+           "mode menu Dorian: F Dorian, saved");
+    nav.home.onClick();
+    check (ctx().paletteKey == 0 && ctx().paletteScale == Scale::Major, "Home: back to C major");
+    nav.up.onClick();
+    nav.up.onClick();
+    check (ctx().paletteKey == 2 && editor->getNavigatorState().distance() == 2, "Fifth up twice: D, two fifths up");
+    nav.dial.onPick (10);
+    check (ctx().paletteKey == 10 && editor->getNavigatorState().distance() == -2, "the dial's Bb: two fifths down");
+
+    // Key carries an away palette along (it keeps its distance).
+    set (*p, params::key, 2.0f);
+    editor->refreshNow();
+    check (ctx().homeKey == 2 && ctx().paletteKey == 0, "Key D: home is D, the palette two fifths down, C");
+    nav.home.onClick();
+    set (*p, params::key, 7.0f);
+    set (*p, params::scale, (float) (int) Scale::NaturalMinor);
+    editor->refreshNow();
+    check (ctx().homeKey == 7 && ctx().paletteKey == 7 && ctx().paletteScale == Scale::NaturalMinor, "a palette at home follows Key and Scale (G minor)");
+
+    // A new editor opens where the palette was left.
+    nav.up.onClick();
+    closeEditor (*p, editor);
+    editor = openEditor (*p);
+    check (editor->getPalette().getGrid().context.paletteKey == 2 && editor->getNavigatorState().distance() == 1, "a reopened editor keeps the palette's position");
+    closeEditor (*p, editor);
+}
+
+//==============================================================================
+// 6, 7: undo history and state.
+
+static void testUndoAndState()
+{
+    std::cout << "== undo history ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->setProgression (song());
+    check (! p->undoState().canUndo, "a loaded progression has no history");
+    check (p->editProgression ("Rename", [] (ChordProgression& q) { return q.renameSection (0, "Intro"); }) && p->undoState().undoLabel == "Rename",
+           "an edit is an undo step");
+    check (! p->editProgression ("Nothing", [] (ChordProgression& q) { return q.renameSection (0, "Intro"); }) && p->undoState().undoLabel == "Rename",
+           "an edit that changes nothing isn't");
+    const uint32_t v = p->progressionVersion();
+    check (p->undoProgression() && p->getProgression() == song() && p->progressionVersion() == v + 1 && p->undoState().canRedo, "undo goes back; the version moves on");
+    p->redoProgression();
+
+    juce::MemoryBlock saved;
+    p->uiState.setProperty ("paletteFifths", 3, nullptr);
+    p->uiState.setProperty ("zoom", 40.0, nullptr);
+    p->getStateInformation (saved);
+    auto restored = std::make_unique<ChordZimmerProcessor>();
+    restored->editProgression ("Something", [] (ChordProgression& q) { return q.insertChord (InsertPoint::newSection (0), song().sections[0].chords[0]); });
+    StateWatch watch;
+    restored->addListener (&watch);
+    restored->setStateInformation (saved.getData(), (int) saved.getSize());
+    for (int i = 0; i < 5; ++i)
+        runTimers (20);
+    restored->removeListener (&watch);
+    check (restored->getProgression() == p->getProgression() && ! restored->undoState().canUndo && ! restored->undoState().canRedo,
+           "a restore brings the progression back and resets the history");
+    check (! watch.changed, "a restore doesn't report a change (the set isn't marked as edited when it opens)");
+    check ((int) restored->uiState.getProperty ("paletteFifths", 0) == 3 && (double) restored->uiState.getProperty ("zoom", 0.0) == 40.0,
+           "the UI's preferences restore (palette position, zoom)");
+    int differing = 0;
+    for (auto* param : p->getParameters())
+        if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
+            differing += get (*p, withId->paramID) != get (*restored, withId->paramID) ? 1 : 0;
+    check (differing == 0, "every parameter restores (" + juce::String (differing) + " differ)");
+
+    // Presets: one with a progression resets the history; one without keeps it.
+    restored->editProgression ("Rename", [] (ChordProgression& q) { return q.renameSection (0, "A"); });
+    auto preset = restored->presetState();
+    preset.removeChild (preset.getChildWithName ("PROGRESSION"), nullptr);
+    restored->applyPreset (preset, "User", "No progression");
+    check (restored->undoState().canUndo && restored->getProgression().sections[0].name == "A", "a preset without a progression keeps it and its history");
+    restored->applyPreset (p->presetState(), "User", "With one");
+    check (! restored->undoState().canUndo && restored->getProgression() == p->getProgression(), "a preset with one loads it and resets the history");
+
+    std::cout << "== editor size ==\n";
+    auto sized = std::make_unique<ChordZimmerProcessor>();
+    StateWatch openWatch;
+    sized->addListener (&openWatch);
+    auto first = openEditor (*sized);
+    sized->removeListener (&openWatch);
+    check (first->getWidth() == ChordZimmerEditor::defaultWidth && first->getHeight() == ChordZimmerEditor::defaultHeight && ! openWatch.changed,
+           "a new instance's editor opens at the default size (1000 x 640) and doesn't report a change");
+    first->setSize (1111, 777);
+    closeEditor (*sized, first);
+    juce::MemoryBlock state;
+    sized->getStateInformation (state);
+    auto reopened = std::make_unique<ChordZimmerProcessor>();
+    reopened->setStateInformation (state.getData(), (int) state.getSize());
+    auto second = openEditor (*reopened);
+    check (second->getWidth() == 1111 && second->getHeight() == 777, "after a save and restore the editor opens at the saved size (1111 x 777)");
+    closeEditor (*reopened, second);
+}
+
+//==============================================================================
+// 8: Detect writes into the timeline.
+
+namespace
+{
+    struct PlayHead : juce::AudioPlayHead
+    {
+        bool playing = true;
+        double ppq = 0.0, bpm = 120.0;
+        juce::Optional<PositionInfo> getPosition() const override
+        {
+            PositionInfo info;
+            info.setIsPlaying (playing);
+            info.setPpqPosition (ppq);
+            info.setBpm (bpm);
+            info.setTimeSignature (juce::AudioPlayHead::TimeSignature { 4, 4 });
+            info.setPpqPositionOfLastBarStart (std::floor (ppq / 4.0) * 4.0);
+            return info;
+        }
+        void advance (int samples, double rate)
+        {
+            if (playing)
+                ppq += samples * bpm / (60.0 * rate);
+        }
+    };
+}
+
+static void testDetect()
+{
+    std::cout << "== Detect into the timeline ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    p->setProgression (song());
+    PlayHead head;
+    p->setPlayHead (&head);
+    set (*p, params::detect, (float) (int) params::DetectMode::Capture);
+    const std::vector<std::vector<int>> chords { { 60, 64, 67 }, { 55, 59, 62 }, { 57, 60, 64 }, { 53, 57, 60 } };
+    const double spb = 48000.0 * 60.0 / head.bpm;
+    juce::AudioBuffer<float> audio (2, 512);
+    juce::MidiBuffer midi;
+    for (int b = 0; b < (int) (chords.size() * 4.0 * spb / 512.0) + 8; ++b)
+    {
+        midi.clear();
+        const double start = head.ppq, end = head.ppq + 512 / spb;
+        for (size_t c = 0; c < chords.size(); ++c)
+            for (int note : chords[c])
+            {
+                const double on = (double) c * 4.0, off = on + 3.5;
+                if (on >= start && on < end)
+                    midi.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) 90), (int) ((on - start) * spb));
+                if (off >= start && off < end)
+                    midi.addEvent (juce::MidiMessage::noteOff (1, note), (int) ((off - start) * spb));
+            }
+        p->processBlock (audio, midi);
+        head.advance (512, 48000.0);
+    }
+    runTimers (50);
+    const bool applied = p->applyDetect();
+    const auto prog = p->getProgression();
+    check (applied && prog.numSections() == 4 && prog.sections[3].name == "Detected" && layout (prog).endsWith ("Detected[C:4 G:4 Am:4 F:4]"),
+           "Use result: the chords heard go on the end as \"Detected\" (" + layout (prog).fromLastOccurrenceOf ("] ", false, false) + ")");
+    check (p->undoState().undoLabel == "Detect" && get (*p, params::detect) < 0.5f && p->undoProgression() && p->getProgression() == song(),
+           "one undo step (\"Detect\"), and Detect is Off again");
+    p->setPlayHead (nullptr);
+}
+
+//==============================================================================
+// 9: no allocation while the timeline plays and the editor edits it.
+
+static void testRealTime()
+{
+    std::cout << "== real time ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    p->setProgression (song());
+    editor->refreshNow();
+    set (*p, params::syncMode, 1.0f);   // Preview: its own clock, no host transport
+    set (*p, params::play, 1.0f);
+    auto& t = editor->getTimeline();
+    juce::AudioBuffer<float> audio (2, 512);
+    juce::MidiBuffer midi;
+    midi.ensureSize (1 << 16);
+    int allocations = 0, ons = 0;
+    for (int b = 0; b < 600; ++b)
+    {
+        if (b % 40 == 20)
+        {
+            // An edit from the editor between blocks: alternately a resize and its undo, a move.
+            if ((b / 40) % 3 == 0)
+                t.setInversion ({ 0, b % 4 }, (b / 40) % 3);
+            else if ((b / 40) % 3 == 1)
+                p->undoProgression();
+            else
+                t.setSelection (Selection::chord (1, (b / 40) % 4));
+            editor->refreshNow();
+        }
+        midi.clear();
+        const auto before = allocCount.load();
+        {
+            AllocWatch watch;
+            p->processBlock (audio, midi);
+        }
+        allocations += allocCount.load() - before;
+        for (const auto m : midi)
+            ons += m.getMessage().isNoteOn() ? 1 : 0;
+    }
+    editor->refreshNow();
+    check (ons > 20 && allocations == 0, juce::String (ons) + " notes played over 600 blocks with edits between them; "
+                                             + juce::String (allocations) + " allocations in processBlock");
+    check (p->playhead.load() > 0.0 && editor->getTransport().now.getName().isNotEmpty(), "the transport shows the chord playing ("
+                                             + editor->getTransport().now.getName() + ")");
+    set (*p, params::play, 0.0f);
+    closeEditor (*p, editor);
+}
+
+int main (int argc, char** argv)
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    if (argc < 3)
+    {
+        std::cerr << "usage: ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]\n";
+        return 2;
+    }
+    const juce::File fixtures (juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]));
+    const juce::File out (juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]));
+    const bool update = argc > 3 && juce::String (argv[3]) == "--update";
+    comparePixels = ! (argc > 3 && juce::String (argv[3]) == "--no-pixels");
+    fixtures.createDirectory();
+    out.createDirectory();
+
+    testSnapshots (fixtures, out, update);
+    testTimeline();
+    testPalette();
+    testUndoAndState();
+    testDetect();
+    testRealTime();
+
+    std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
+    return failures == 0 ? 0 : 1;
+}

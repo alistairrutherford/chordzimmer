@@ -4,9 +4,10 @@
 //
 // Every description is in one table (InfoView.cpp), keyed by what is pointed at: a parameter's
 // ID for its control (ParamControl), "ui.…" for the buttons that aren't parameters, "display.…"
-// for the pads, the keyboard, Heard and the steps, "card.…" for the effects cards, "area.…" for
-// the workspace. The editor finds the key under the mouse (ChordZimmerEditor::infoKeyAt) and
-// shows it.
+// for the timeline, the palette, the dial, the readout and the keyboard, "card.…" for the
+// performance popover's cards. The editor finds the key under the mouse
+// (ChordZimmerEditor::infoKeyAt) and shows it; the palette and the timeline also say what is
+// under the mouse (a chord's notes, a block's length).
 #pragma once
 
 #include "Theme.h"

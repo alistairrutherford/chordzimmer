@@ -26,6 +26,7 @@
 #include "../core/engine/SnapshotExchange.h"
 #include "../core/midiio/ExportRecorder.h"
 #include "../core/model/Progression.h"
+#include "../core/model/UndoList.h"
 #include "../core/model/Workspace.h"
 #include "../core/midiio/PatternRender.h"
 #include "Parameters.h"
@@ -125,10 +126,30 @@ namespace chordzimmer
         // and in presets, next to the workspace. Any thread except the audio thread (a lock); the
         // audio thread plays it as a Timeline (ProgressionPlayer.h) handed over through a
         // SnapshotExchange whenever it or the loop selection changes. A change the host should
-        // save marks the state changed. The editor's undo history (UndoList.h) arrives with the
-        // timeline UI in Phase 4.
+        // save marks the state changed.
         ChordProgression getProgression() const;
+
+        // Replaces the progression as a load (a restore, a preset, the test rig): the undo
+        // history starts again from it.
         void setProgression (const ChordProgression&);
+
+        // The editor's edits (Phase 4, PLAN.md §3.3 "all undoable"): `edit` runs on the current
+        // progression as one undo step named `label` (UndoList.h); true if it changed anything.
+        // Undo and redo step through the history (100 steps), which a restore or a preset with a
+        // progression resets. Not saved. Message thread (any thread but the audio thread).
+        bool editProgression (const std::string& label, const std::function<bool (ChordProgression&)>& edit);
+        bool undoProgression();
+        bool redoProgression();
+        struct UndoState
+        {
+            bool canUndo = false, canRedo = false;
+            std::string undoLabel, redoLabel;
+        };
+        UndoState undoState() const;
+
+        // Goes up by one whenever the progression changes (an edit, undo, a load), so the editor
+        // copies it only then.
+        uint32_t progressionVersion() const noexcept { return progressionChanges.load(); }
 
         // The selection the loop region follows (PLAN.md §3.3: the selected chords and sections,
         // else everything). Editor state: not saved.
@@ -187,9 +208,11 @@ namespace chordzimmer
         static juce::File heardKeyFile();
 
         // Detect (message thread). The chords heard in the current (or last) capture, and
-        // applyDetect: with chords, the current pattern becomes them (core/model/Detect.h, in
-        // the key guessed, else the Key), Key and Scale follow a guess, and Detect = Off, as one
-        // set of gestures; returns true. Without chords, Detect = Capture and false.
+        // applyDetect: with chords, they go on the end of the timeline as a new section,
+        // "Detected" (core/model/Detect.h, in the key guessed, else the Key; one undo step; up to
+        // ChordMonkey's Phase 3 they replaced the current workspace pattern), Key and Scale
+        // follow a guess, and Detect = Off, as one set of gestures; returns true. Without
+        // chords, Detect = Capture and false.
         params::DetectMode detectMode() const noexcept { return snapshot.detectMode(); }
         const HeardChords& heardChords();
         bool applyDetect();
@@ -285,6 +308,8 @@ namespace chordzimmer
         SnapshotExchange<Workspace> workspaceForAudio;   // written under workspaceLock
         mutable juce::CriticalSection progressionLock;
         ChordProgression progression;
+        UndoList history;                                // under progressionLock
+        std::atomic<uint32_t> progressionChanges { 0 };
         Selection loopSelection;
         SnapshotExchange<Timeline> timelineForAudio;     // written under progressionLock
         void publishTimeline();                          // under progressionLock

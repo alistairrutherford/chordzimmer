@@ -53,6 +53,7 @@
         <FILE id="cmF010" name="Substitutes.h" compile="0" resource="0" file="Source/core/model/Substitutes.h"/>
         <FILE id="czF201" name="Progression.h" compile="0" resource="0" file="Source/core/model/Progression.h"/>
         <FILE id="czF202" name="UndoList.h" compile="0" resource="0" file="Source/core/model/UndoList.h"/>
+        <FILE id="czF203" name="TimelineLayout.h" compile="0" resource="0" file="Source/core/model/TimelineLayout.h"/>
       </GROUP>
       <GROUP id="csGrp4" name="core/midiio">
         <FILE id="csF052" name="MidiFile.h" compile="0" resource="0" file="Source/core/midiio/MidiFile.h"/>
@@ -81,8 +82,12 @@
         <FILE id="csF050" name="Panels.cpp" compile="1" resource="0" file="Source/ui/Panels.cpp"/>
         <FILE id="csF059" name="PresetBar.h" compile="0" resource="0" file="Source/ui/PresetBar.h"/>
         <FILE id="csF060" name="PresetBar.cpp" compile="1" resource="0" file="Source/ui/PresetBar.cpp"/>
-        <FILE id="cmF008" name="WorkspacePanel.h" compile="0" resource="0" file="Source/ui/WorkspacePanel.h"/>
-        <FILE id="cmF009" name="WorkspacePanel.cpp" compile="1" resource="0" file="Source/ui/WorkspacePanel.cpp"/>
+        <FILE id="czF401" name="TimelinePanel.h" compile="0" resource="0" file="Source/ui/TimelinePanel.h"/>
+        <FILE id="czF402" name="TimelinePanel.cpp" compile="1" resource="0" file="Source/ui/TimelinePanel.cpp"/>
+        <FILE id="czF403" name="PalettePanel.h" compile="0" resource="0" file="Source/ui/PalettePanel.h"/>
+        <FILE id="czF404" name="PalettePanel.cpp" compile="1" resource="0" file="Source/ui/PalettePanel.cpp"/>
+        <FILE id="czF405" name="NavigatorBar.h" compile="0" resource="0" file="Source/ui/NavigatorBar.h"/>
+        <FILE id="czF406" name="NavigatorBar.cpp" compile="1" resource="0" file="Source/ui/NavigatorBar.cpp"/>
         <FILE id="cmF900" name="InfoView.h" compile="0" resource="0" file="Source/ui/InfoView.h"/>
         <FILE id="cmF901" name="InfoView.cpp" compile="1" resource="0" file="Source/ui/InfoView.cpp"/>
       </GROUP>

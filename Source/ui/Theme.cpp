@@ -46,14 +46,12 @@ namespace chordzimmer::ui
     }
 
     //==========================================================================
-    Family familyOf (unsigned mask, int rootPc) noexcept
+    juce::Colour sectionColour (int index) noexcept
     {
-        const auto has = [&] (int interval) { return ((mask >> (((rootPc + interval) % 12 + 12) % 12)) & 1u) != 0; };
-        if (has (7) && has (4) && ! has (3))
-            return Family::Major;
-        if (has (7) && has (3) && ! has (4))
-            return Family::Minor;
-        return Family::Other;
+        // Eight hues round the wheel, low saturation and mid brightness: tints, not the chord
+        // families' neon.
+        static constexpr float hues[8] = { 0.60f, 0.47f, 0.76f, 0.95f, 0.10f, 0.30f, 0.53f, 0.68f };
+        return juce::Colour::fromHSV (hues[((index % 8) + 8) % 8], 0.38f, 0.62f, 1.0f);
     }
 
     juce::Colour familyFrom (Family f) noexcept

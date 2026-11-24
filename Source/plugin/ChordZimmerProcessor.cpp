@@ -366,9 +366,14 @@ namespace chordzimmer
             return false;
         }
 
-        auto w = getWorkspace();
-        w.patterns[(size_t) juce::jlimit (0, numPatterns - 1, s.pattern)] = p;
-        setWorkspace (w);
+        // PLAN.md §2: the timeline replaces the workspace (Phase 4), so the chords go on its end.
+        const ChordProgression heardSection = progressionFromPattern (p, "Detected");
+        editProgression ("Detect", [&] (ChordProgression& q)
+        {
+            ProgressionClip clip;
+            clip.parts = heardSection.sections;
+            return q.insert (InsertPoint::newSection (q.numSections()), clip);
+        });
         engine.requestHeardReset();      // the next capture starts empty
         heardCache = {};
         if (g.has())
@@ -795,13 +800,68 @@ namespace chordzimmer
     {
         {
             const juce::ScopedLock sl (progressionLock);
+            history.reset (p);
             if (progression == p)
                 return;
             progression = p;
             loopSelection = progression.normalised (loopSelection);
             publishTimeline();
         }
+        ++progressionChanges;
         notifyStateChanged();
+    }
+
+    // The editor's edits (Phase 4): through the UndoList, then as setProgression without its
+    // reset.
+    bool ChordZimmerProcessor::editProgression (const std::string& label, const std::function<bool (ChordProgression&)>& edit)
+    {
+        {
+            const juce::ScopedLock sl (progressionLock);
+            if (! history.perform (label, [&edit] (ChordProgression& q) { return edit (q); }))
+                return false;
+            progression = history.current();
+            loopSelection = progression.normalised (loopSelection);
+            publishTimeline();
+        }
+        ++progressionChanges;
+        notifyStateChanged();
+        return true;
+    }
+
+    bool ChordZimmerProcessor::undoProgression()
+    {
+        {
+            const juce::ScopedLock sl (progressionLock);
+            if (! history.undo())
+                return false;
+            progression = history.current();
+            loopSelection = progression.normalised (loopSelection);
+            publishTimeline();
+        }
+        ++progressionChanges;
+        notifyStateChanged();
+        return true;
+    }
+
+    bool ChordZimmerProcessor::redoProgression()
+    {
+        {
+            const juce::ScopedLock sl (progressionLock);
+            if (! history.redo())
+                return false;
+            progression = history.current();
+            loopSelection = progression.normalised (loopSelection);
+            publishTimeline();
+        }
+        ++progressionChanges;
+        notifyStateChanged();
+        return true;
+    }
+
+    ChordZimmerProcessor::UndoState ChordZimmerProcessor::undoState() const
+    {
+        const juce::ScopedLock sl (progressionLock);
+        return { history.canUndo(), history.canRedo(), history.undoLabel(), history.redoLabel() };
     }
 
     Selection ChordZimmerProcessor::getLoopSelection() const
@@ -887,9 +947,11 @@ namespace chordzimmer
         {
             const juce::ScopedLock sl (progressionLock);
             progression = progressionFromTree (pg);
+            history.reset (progression);
             loopSelection = {};
             publishTimeline();
         }
+        ++progressionChanges;
         tree.removeChild (pg, nullptr);
         dropNonFiniteValues (tree);
         dropAnalyse (tree);

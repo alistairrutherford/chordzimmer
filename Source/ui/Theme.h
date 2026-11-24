@@ -12,6 +12,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "../core/theory/PaletteBuilder.h"
 
 namespace chordzimmer::ui
 {
@@ -71,15 +72,16 @@ namespace chordzimmer::ui
         const juce::Colour blackKey     { 0xff121729 };
     }
 
-    // Chord families (PLAN.md §3.1): from the chord's 3rd and 5th, not its name.
-    enum class Family { Major, Minor, Other };
-
-    // A chord's family from its pitch classes (bit pc set) and root pitch class.
-    Family familyOf (unsigned pitchClassMask, int rootPc) noexcept;
+    // Chord families (PLAN.md §3.1): from the chord's 3rd and 5th, not its name. Since Phase 4
+    // the core's ChordFamily / chordFamily (PaletteBuilder.h) in place of the UI's own familyOf.
+    using Family = ChordFamily;
 
     juce::Colour familyFrom (Family) noexcept;
     juce::Colour familyTo (Family) noexcept;
     juce::Colour familyMid (Family) noexcept;   // for glows and rings
+
+    // The timeline's 8 section hues (PLAN.md §5.1: low saturation), 0 … numSectionColours-1.
+    juce::Colour sectionColour (int index) noexcept;
 
     // Inter (body) and Space Grotesk (headings, chord names).
     juce::Font font (float height, bool bold = false);

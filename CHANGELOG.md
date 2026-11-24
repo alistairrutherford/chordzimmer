@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased: Phase 4, the editor
+
+The palette, the key navigator and the timeline (PLAN.md §6, Phase 4; §3.1–§3.3, §5).
+
+- **Palette** (PLAN.md §3.1): the 7 degrees of the palette's key and mode × the complexity
+  rows (power and sus, triads, 6ths and 7ths, colour, extended, altered), as Night Studio orbs:
+  teal major, violet minor, slate other; filled in the home key, a ring when not. Numerals
+  and roots head the columns; about four rows show, the triads first; the wheel scrolls. Click to
+  hear a chord, drag it onto the timeline, double-click (or right-click) to add it at the
+  insertion marker. Pointing at one shows its notes and which are out of key in the Info View;
+  the chord the timeline plays glows with the beat.
+- **Key navigator** (PLAN.md §3.2), in the footer: the home key (Key, Scale), ⌂ Home, ◀ ▶ a
+  fifth down or up, the parallel modes, and a circle-of-fifths dial (home in amber, the palette's
+  key lit, click a key to go there). The palette position is saved with the plug-in.
+- **Timeline** (PLAN.md §3.3): sections side by side as named, coloured lanes of chord blocks
+  (width = duration), with the playhead, the loop region and the insertion marker.
+  - Drag a chord or a section's tab to move it; **Alt-drag to copy**, also between sections; drop
+    a palette chord into a section, between two, or on empty space (a new section).
+  - Drag a chord's right edge to change its length, or a section's to scale its chords, on the
+    snap grid (Off, 1/16 … Bar; default 1/8).
+  - Click selects, Shift/Cmd-click adds; the selection is the loop region. Delete, Cmd-C / X / V
+    (pasting at the insertion marker), Cmd-D (duplicate in place), ← →, Cmd +/- (zoom),
+    Alt+Shift+wheel zoom, the wheel scrolls.
+  - Right-click: inversion, octave, bass note, duplicate, copy, cut, paste, delete; a section's
+    rename (or double-click its tab) and colour.
+  - **Undo / redo** (Cmd-Z, Shift-Cmd-Z, and buttons): every edit, 100 steps. A restore or a
+    preset with a progression starts the history again.
+- **Transport bar** (PLAN.md §3.3): ⏮ rewind, Play (Space), Loop (L), Sync mode, Start bar,
+  Snap, undo and redo, and the chord now with its numeral and the bar.
+- **Performance popover** (PLAN.md §3.6), from the footer: Strum, Velocity, Voicing (with
+  Octave), and Keys in (Chord Group, Progression, Hold, Key octave, Heard, Detect).
+- **Changed:** ChordMonkey's chord pads, workspace panel (patterns A–D, the pattern drag-out) and
+  effects cards are gone from the editor; the workspace is still read from and saved in the
+  state. **Detect**'s *Use result* now puts the chords heard on the end of the timeline as a
+  section "Detected" (one undo step) instead of into a workspace pattern. The **Pattern**
+  parameter has no control any more (kept for older sets).
+- Tests: `test_timeline` (scripted drags on the model); the editor snapshot test is back
+  (`Tests/run_snapshot.sh`: reference images, every parameter reachable, the Info View, the
+  timeline's and palette's mouse gestures, undo, state, Detect, no allocation while playing).
+
 ## Unreleased: Phase 3, playback
 
 Engine and processor only (PLAN.md §6, Phase 3); the timeline UI is Phase 4.

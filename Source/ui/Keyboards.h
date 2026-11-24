@@ -1,14 +1,11 @@
-// The editor's playable surfaces (ChordChimp's PLAN.md §5). Each plays through the engine like host MIDI
+// The editor's output keyboard (ChordChimp's PLAN.md §5): it plays through the engine like host MIDI
 // input (ChordZimmerProcessor::pushUiNote), so clicking is the same as pressing a key.
 //
-//   ChordPads       seven pads, one per white-key letter (C … B), and above them five smaller
-//                   ones over the gaps, one per black key (C# … A#: the borrowed chords): Night
-//                   Studio orbs (Theme.h) in the chord's family colour, filled in key and hollow
-//                   out of it, with the Roman numeral and name and the key letter in a corner;
-//                   glowing brighter on hover and while the chord plays, with an amber stripe on
-//                   the last one played. Click (or drag across) to play.
 //   OutputKeyboard  88 keys: the notes ChordZimmer sends (lit) and the keys held (outlined).
 //                   Hideable.
+//
+// ChordMonkey's chord pads (one per white and black key) gave way to the palette in Phase 4
+// (PalettePanel.h, PLAN.md §3.1).
 #pragma once
 
 #include "../plugin/ChordZimmerProcessor.h"
@@ -19,14 +16,14 @@ namespace chordzimmer::ui
     // What the editor shows, refreshed on its timer.
     struct UiModel
     {
-        ChordDisplay display;             // the chords, their context, last slot
         EngineSettings settings;          // the parameters now
         params::AnalyseMode analyse = params::AnalyseMode::Off;
         KeyGuess guess;                   // the key heard in Analyse mode
-        Workspace workspace;              // Phase 6: the patterns
-        int playingPattern = 0, playingSlot = -1;
-        params::DetectMode detect = params::DetectMode::Off;   // Phase 8
+        params::DetectMode detect = params::DetectMode::Off;
         int heardChords = 0;              // chords heard in this capture
+        double playhead = -1.0;           // the timeline position (beats), -1 when not playing
+        int playingChord = -1;            // the timeline chord sounding (in order), or -1
+        int beatsPerBar = 4;              // the host's meter
     };
 
     // Piano geometry for notes lo..hi (both white keys) across a width.
@@ -55,35 +52,6 @@ namespace chordzimmer::ui
         ChordZimmerProcessor& processor;
         bool toPalette = false;
         int held = -1;
-    };
-
-    class ChordPads : public juce::Component,
-                      public juce::SettableTooltipClient
-    {
-    public:
-        explicit ChordPads (ChordZimmerProcessor&);
-        void refresh (const UiModel&);
-
-        juce::Rectangle<float> padBounds (int slot) const;
-        int slotAt (juce::Point<float>) const;   // -1 if none
-
-        void paint (juce::Graphics&) override;
-        void mouseDown (const juce::MouseEvent&) override;
-        void mouseDrag (const juce::MouseEvent&) override;
-        void mouseUp (const juce::MouseEvent&) override;
-        void mouseMove (const juce::MouseEvent&) override;
-        void mouseExit (const juce::MouseEvent&) override;
-
-        // Right-click's "Add to the pattern" (Phase 6): the pad's slot (0..11).
-        std::function<void (int)> onAddToPattern;
-
-    private:
-        ChordZimmerProcessor& processor;
-        PlayingKeys playing;
-        UiModel model;
-        std::array<bool, numChordSlots> active {};
-        int lastPad = -1;                 // the pad pressed or played last (what a drag out takes)
-        int hovered = -1;                 // the pad under the mouse (a stronger glow)
     };
 
     class OutputKeyboard : public juce::Component,

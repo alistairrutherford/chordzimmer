@@ -1,17 +1,21 @@
-// The editor's panels (ChordChimp's PLAN.md §5):
+// The editor's bars and the performance popover (PLAN.md §5; Phase 4):
 //
-//   TopBar         the name · On · the preset browser · Export (drag out the last bars played) ·
-//                  Keys (show or hide the output keyboard). Pattern and Play are in the
-//                  workspace panel (Phase 6, WorkspacePanel.h)
-//   GlobalRow      Key · Heard · Scale · Chord Group · Progression · Octave
-//   HeardKey       the Heard box (ChordChimp's docs/KEY_DETECTION_PLAN.md K5): Analyse, then the key heard;
-//                  a click on the guess sets Key (and Scale) to it, ✕ stops analysing
-//   EffectsPanel   four cards: Strum, Velocity; Voicing (Voicing, Bass, Stack, Voice leading),
-//                  Keys (Hold, Key octave). ChordMonkey's Arp, Style, Repeat, Step seq and Bind /
-//                  Keys-Lock row are gone (PLAN.md §2); PLAN.md §3.6's performance popover
-//                  replaces this panel in Phase 4.
+//   TopBar            the name · On · the preset browser · Export (drag out the last bars
+//                     played) · Keys (show or hide the output keyboard)
+//   TransportBar      PLAN.md §3.3's transport: ⏮ rewind · Play · Loop · Sync mode · Start bar ·
+//                     Snap · undo, redo · the chord now (name, numeral, where)
+//   PerformancePanel  PLAN.md §3.6's performance popover, opened from the footer: Strum,
+//                     Velocity, Voicing (with Octave) and Keys (what MIDI in does: Chord Group,
+//                     Progression, Hold, Key octave, Heard, Detect). ChordMonkey's global row
+//                     and effects cards moved here; Key and Scale (the home key) are in the
+//                     footer (NavigatorBar.h)
+//   HeardKey          the Heard box (ChordChimp's docs/KEY_DETECTION_PLAN.md K5): Analyse, then
+//                     the key heard; a click on the guess sets Key (and Scale) to it, ✕ stops
+//   IconButton        a button with a drawn icon (rewind, undo, redo, home, ◀ ▶)
 //
-// Test pattern (the LiveBridge rig) has no control: Live's device parameters reach it.
+// Test pattern and Test workspace (the LiveBridge rig) have no control: Live's device
+// parameters reach them. Pattern (ChordMonkey's workspace patterns) has none since Phase 4: the
+// timeline replaced the workspace (PLAN.md §2).
 #pragma once
 
 #include "Keyboards.h"
@@ -19,6 +23,20 @@
 
 namespace chordzimmer::ui
 {
+    class IconButton : public juce::Button
+    {
+    public:
+        enum class Icon { Rewind, Undo, Redo, Home, Left, Right };
+
+        IconButton (const juce::String& infoKey, Icon);
+        void setAccented (bool shouldBe);          // amber icon (Home away from home)
+        void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+
+    private:
+        Icon icon;
+        bool accented = false;
+    };
+
     class TopBar : public juce::Component
     {
     public:
@@ -35,6 +53,44 @@ namespace chordzimmer::ui
         ParamControl enable;
         juce::TextButton keyboardButton { "Keys" };
         juce::Rectangle<int> nameArea;
+    };
+
+    // The transport bar's readout: the chord sounding (or the one selected), its numeral in the
+    // home key, and where the playhead is (bar.beat).
+    class NowDisplay : public juce::Component
+    {
+    public:
+        NowDisplay();
+        void set (const juce::String& name, const juce::String& numeral, const juce::String& where);
+        const juce::String& getName() const noexcept { return name; }
+        const juce::String& getNumeral() const noexcept { return numeral; }
+        void paint (juce::Graphics&) override;
+
+    private:
+        juce::String name, numeral, where;
+    };
+
+    class TransportBar : public juce::Component
+    {
+    public:
+        TransportBar (ChordZimmerProcessor&, Bindings&);
+        void resized() override;
+
+        void setUndoState (const ChordZimmerProcessor::UndoState&);
+        void setSnap (Snap);
+        Snap getSnap() const noexcept;
+
+        std::function<void()> onUndo, onRedo;
+        std::function<void (Snap)> onSnap;
+
+        IconButton rewind, undo, redo;
+        ParamControl play, loop, syncMode, startBar;
+        juce::ComboBox snap;
+        NowDisplay now;
+
+    private:
+        ChordZimmerProcessor& processor;
+        juce::Label snapCaption;
     };
 
     // The Analyse control and the key it heard. It follows the Analyse parameter, so a change
@@ -78,38 +134,26 @@ namespace chordzimmer::ui
         static constexpr int captionHeight = 15, closeWidth = 18;
     };
 
-    class GlobalRow : public juce::Component
+    class PerformancePanel : public juce::Component
     {
     public:
-        GlobalRow (ChordZimmerProcessor&, Bindings&);
-        void refresh (const UiModel&);
-        void resized() override;
-
-        HeardKey heard;
-
-    private:
-        Bindings& bindings;
-        ParamControl key, scale, group, progression, octave;
-    };
-
-    class EffectsPanel : public juce::Component
-    {
-    public:
-        explicit EffectsPanel (Bindings&);
+        PerformancePanel (ChordZimmerProcessor&, Bindings&);
         void refresh (const UiModel&);
         void paint (juce::Graphics&) override;
         void resized() override;
 
         // The Info View's key for a point on the panel itself: the card it is on.
         juce::String infoKeyAt (juce::Point<int>) const;
-        // The height the cards need at this width (the editor sizes the chord pads around it).
+        static int preferredWidth() { return 660; }
         static int preferredHeight();
+
+        HeardKey heard;
 
     private:
         struct Card
         {
-            juce::String title;
-            std::vector<ParamControl*> controls;
+            juce::String title, infoKey;
+            std::vector<juce::Component*> controls;
             juce::Rectangle<int> bounds;
         };
 
@@ -120,6 +164,6 @@ namespace chordzimmer::ui
         juce::OwnedArray<ParamControl> controls;
         std::array<Card, 4> cards;
 
-        static constexpr int titleHeight = 22, controlHeight = 40, gap = 8;
+        static constexpr int titleHeight = 22, controlHeight = 40, gap = 8, margin = 12;
     };
 }

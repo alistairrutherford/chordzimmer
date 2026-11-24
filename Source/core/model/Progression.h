@@ -410,9 +410,13 @@ namespace chordzimmer
         // a limit (maxProgressionSections, maxSectionChords, maxProgressionChords) changes
         // nothing and returns false.
 
+        // Every edit that puts chords in (insertChord, insert, move, duplicate, duplicateInPlace)
+        // can report where they landed in `placed` (Phase 4: the editor selects them): the new
+        // chords when they went into a section, or the new sections. Left alone on failure.
+
         // Drop a palette chord: on empty space or between two sections (NewSection) it makes a
         // section with a default name and colour; on a section (InSection) it goes in at the point.
-        bool insertChord (InsertPoint at, const ProgressionChord& c)
+        bool insertChord (InsertPoint at, const ProgressionChord& c, Selection* placed = nullptr)
         {
             if (c.chord.empty())
                 return false;
@@ -425,11 +429,11 @@ namespace chordzimmer
             }
             part.chords.push_back (c);
             clip.parts.push_back (std::move (part));
-            return insert (at, clip);
+            return insert (at, clip, placed);
         }
 
         // Paste (at the insertion marker) and the second half of Duplicate.
-        bool insert (InsertPoint at, const ProgressionClip& clip)
+        bool insert (InsertPoint at, const ProgressionClip& clip, Selection* placed = nullptr)
         {
             const int adding = clip.numChords();
             if (adding == 0 || numChords() + adding > maxProgressionChords)
@@ -451,6 +455,12 @@ namespace chordzimmer
                 for (const auto& p : clip.parts)
                     flat.insert (flat.end(), p.chords.begin(), p.chords.end());
                 ch.insert (ch.begin() + at.index, flat.begin(), flat.end());
+                if (placed != nullptr)
+                {
+                    *placed = {};
+                    for (int i = 0; i < adding; ++i)
+                        placed->chords.push_back ({ at.section, at.index + i });
+                }
                 return true;
             }
 
@@ -471,6 +481,12 @@ namespace chordzimmer
             if (numSections() + (int) made.size() > maxProgressionSections)
                 return false;
             sections.insert (sections.begin() + at.section, made.begin(), made.end());
+            if (placed != nullptr)
+            {
+                *placed = {};
+                for (int i = 0; i < (int) made.size(); ++i)
+                    placed->sections.push_back (at.section + i);
+            }
             return true;
         }
 
@@ -569,7 +585,7 @@ namespace chordzimmer
         // Drag to move: the selection is taken out and put in at `to` (positions as they are
         // before the move). Dropping into a section the move empties puts the chords back in a
         // section where it was; dropping into a section that is itself being moved fails.
-        bool move (const Selection& selection, InsertPoint to)
+        bool move (const Selection& selection, InsertPoint to, Selection* placed = nullptr)
         {
             const Selection sel = normalised (selection);
             if (sel.empty())
@@ -610,20 +626,23 @@ namespace chordzimmer
             ChordProgression next = *this;
             const ProgressionClip clip = copy (sel);
             next.removeNormalised (sel);
-            if (! next.insert (target, clip) || next == *this)
+            Selection where;
+            if (! next.insert (target, clip, &where) || next == *this)
                 return false;
             *this = std::move (next);
+            if (placed != nullptr)
+                *placed = std::move (where);
             return true;
         }
 
         // Alt/Option-drag: a copy of the selection goes in at `to`, anywhere, including between
         // sections (as new sections).
-        bool duplicate (const Selection& selection, InsertPoint to) { return insert (to, copy (selection)); }
+        bool duplicate (const Selection& selection, InsertPoint to, Selection* placed = nullptr) { return insert (to, copy (selection), placed); }
 
         // Duplicate in place: the copy goes right after the selection's last item. After whole
         // sections (the last item is a section) the copies are new sections; after chords they
         // go into the last chord's section.
-        bool duplicateInPlace (const Selection& selection)
+        bool duplicateInPlace (const Selection& selection, Selection* placed = nullptr)
         {
             const Selection sel = normalised (selection);
             if (sel.empty())
@@ -631,8 +650,8 @@ namespace chordzimmer
             const int lastSection = sel.sections.empty() ? -1 : sel.sections.back();
             const ChordRef lastChord = sel.chords.empty() ? ChordRef {} : sel.chords.back();
             if (lastSection >= lastChord.section)
-                return insert (InsertPoint::newSection (lastSection + 1), copy (sel));
-            return insert (InsertPoint::inSection (lastChord.section, lastChord.index + 1), copy (sel));
+                return insert (InsertPoint::newSection (lastSection + 1), copy (sel), placed);
+            return insert (InsertPoint::inSection (lastChord.section, lastChord.index + 1), copy (sel), placed);
         }
 
         // Right-click a chord (PLAN.md §3.3).

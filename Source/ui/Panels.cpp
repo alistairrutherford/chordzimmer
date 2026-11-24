@@ -241,131 +241,228 @@ namespace chordzimmer::ui
     }
 
     //==========================================================================
-    GlobalRow::GlobalRow (ChordZimmerProcessor& p, Bindings& b)
-        : heard (p, b), bindings (b), key (b, params::key), scale (b, params::scale), group (b, params::chordGroup), progression (b, params::progression),
-          octave (b, params::chordOctave, "Octave")
+    IconButton::IconButton (const juce::String& infoKey, Icon i) : juce::Button (infoKey), icon (i)
     {
-        progression.setTooltip ("Which chord each white key plays");
-        octave.setTooltip ("Chord Octave: the register the chords play in");
-        for (auto* c : std::initializer_list<juce::Component*> { &key, &heard, &scale, &group, &progression, &octave })
-            addAndMakeVisible (c);
+        setComponentID (infoKey);
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
     }
 
-    void GlobalRow::refresh (const UiModel& m) { heard.refresh (m); }
-
-    void GlobalRow::resized()
+    void IconButton::setAccented (bool shouldBe)
     {
-        // Sized to the content (ChordChimp's docs/KEY_DETECTION_PLAN.md K5.1): each menu gets the width of its
-        // longest choice, Octave a little slider; then Heard grows to fit its longest guess, and
-        // what's left is shared by weight. Each column has 4 px either side.
-        constexpr int pad = 8, comboExtra = LookAndFeel::comboArrowWidth + 2 * LookAndFeel::comboTextInset;
-        const auto comboFont = font (13.0f);
-        const auto widest = [&] (const char* id)
+        if (accented != shouldBe)
         {
-            int w = 0;
-            if (auto* c = dynamic_cast<juce::AudioParameterChoice*> (bindings.param (id)))
-                for (const auto& t : c->choices)
-                    w = juce::jmax (w, juce::GlyphArrangement::getStringWidthInt (comboFont, t));
-            return w + comboExtra + pad;
-        };
-        struct Col { juce::Component* c; int min, weight; };
-        Col cols[] = { { &key, widest (params::key), 1 },
-                       { &heard, HeardKey::minimumWidth() + pad, 0 },
-                       { &scale, widest (params::scale), 2 },
-                       { &group, widest (params::chordGroup), 2 },
-                       { &progression, widest (params::progression), 2 },
-                       { &octave, 52 + pad, 1 } };
-        int spare = getWidth(), weights = 0;
-        for (const auto& c : cols)
-        {
-            spare -= c.min;
-            weights += c.weight;
+            accented = shouldBe;
+            repaint();
         }
-        constexpr size_t numCols = std::size (cols);
-        int widths[numCols] {};
-        if (spare < 0)
+    }
+
+    void IconButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
+    {
+        getLookAndFeel().drawButtonBackground (g, *this, colours::raised, highlighted, down);
+        const auto r = getLocalBounds().toFloat().withSizeKeepingCentre (12.0f, 12.0f);
+        juce::Path p;
+        const float x = r.getX(), y = r.getY(), w = r.getWidth(), h = r.getHeight();
+        bool stroke = false;
+        switch (icon)
         {
-            // Narrower than the content (not at the editor's sizes): everything shrinks alike.
-            for (size_t i = 0; i < numCols; ++i)
-                widths[i] = cols[i].min * getWidth() / (getWidth() - spare);
+            case Icon::Rewind:   // a bar and a triangle pointing left
+                p.addRectangle (x, y, 2.0f, h);
+                p.addTriangle (x + w, y, x + w, y + h, x + 2.5f, y + h * 0.5f);
+                break;
+            case Icon::Left:
+                p.addTriangle (x + w * 0.8f, y, x + w * 0.8f, y + h, x + w * 0.15f, y + h * 0.5f);
+                break;
+            case Icon::Right:
+                p.addTriangle (x + w * 0.2f, y, x + w * 0.2f, y + h, x + w * 0.85f, y + h * 0.5f);
+                break;
+            case Icon::Home:     // a roof and a body
+                p.addTriangle (x + w * 0.5f, y, x - 1.0f, y + h * 0.5f, x + w + 1.0f, y + h * 0.5f);
+                p.addRectangle (x + w * 0.18f, y + h * 0.5f, w * 0.64f, h * 0.5f);
+                break;
+            case Icon::Undo:
+            case Icon::Redo:     // a curved arrow
+            {
+                const bool undo = icon == Icon::Undo;
+                juce::Path arc;
+                arc.addCentredArc (x + w * 0.5f, y + h * 0.62f, w * 0.38f, h * 0.36f, 0.0f,
+                                   undo ? -juce::MathConstants<float>::halfPi : juce::MathConstants<float>::halfPi,
+                                   undo ? juce::MathConstants<float>::halfPi * 1.6f : -juce::MathConstants<float>::halfPi * 1.6f, true);
+                g.setColour ((isEnabled() ? colours::text : colours::faint));
+                g.strokePath (arc, juce::PathStrokeType (1.6f));
+                const float tipX = undo ? x + w * 0.12f : x + w * 0.88f;
+                p.addTriangle (tipX, y + h * 0.62f - 4.0f, tipX, y + h * 0.62f + 4.0f, undo ? tipX - 4.0f : tipX + 4.0f, y + h * 0.62f);
+                stroke = true;
+                break;
+            }
         }
-        else
-        {
-            const int heardMore = juce::jmin (spare, HeardKey::preferredWidth() + pad - cols[1].min);
-            spare -= heardMore;
-            for (size_t i = 0; i < numCols; ++i)
-                widths[i] = cols[i].min + (i == 1 ? heardMore : spare * cols[i].weight / weights);
-        }
-        auto r = getLocalBounds();
-        for (size_t i = 0; i < numCols; ++i)
-            cols[i].c->setBounds (r.removeFromLeft (widths[i]).reduced (pad / 2, 0));
+        juce::ignoreUnused (stroke);
+        g.setColour (! isEnabled() ? colours::faint : (accented ? night::accent : colours::text));
+        g.fillPath (p);
     }
 
     //==========================================================================
-    EffectsPanel::EffectsPanel (Bindings& b) : bindings (b)
+    NowDisplay::NowDisplay() { setComponentID ("display.now"); }
+
+    void NowDisplay::set (const juce::String& n, const juce::String& num, const juce::String& w)
+    {
+        if (n == name && num == numeral && w == where)
+            return;
+        name = n;
+        numeral = num;
+        where = w;
+        repaint();
+    }
+
+    void NowDisplay::paint (juce::Graphics& g)
+    {
+        auto r = getLocalBounds().reduced (4, 0);
+        g.setFont (font (11.5f));
+        g.setColour (colours::dim);
+        // Where the playhead is, when there's room for it next to the chord.
+        if (r.getWidth() >= 150)
+            g.drawText (where, r.removeFromRight (juce::GlyphArrangement::getStringWidthInt (font (11.5f), "Bar 999.4") + 6), juce::Justification::centredRight);
+        if (name.isEmpty())
+        {
+            g.setColour (colours::faint);
+            g.setFont (font (12.0f));
+            g.drawText (juce::String::fromUTF8 ("\xe2\x80\x94"), r, juce::Justification::centredRight);
+            return;
+        }
+        const auto numeralFont = headingFont (15.0f, false);
+        const int numeralWidth = juce::GlyphArrangement::getStringWidthInt (numeralFont, numeral) + 10;
+        g.setFont (numeralFont);
+        g.setColour (night::accent);
+        g.drawText (numeral, r.removeFromRight (numeralWidth), juce::Justification::centredRight);
+        g.setFont (headingFont (20.0f, true));
+        g.setColour (colours::text);
+        g.drawFittedText (name, r, juce::Justification::centredRight, 1, 0.7f);
+    }
+
+    //==========================================================================
+    TransportBar::TransportBar (ChordZimmerProcessor& p, Bindings& b)
+        : rewind ("ui.rewind", IconButton::Icon::Rewind), undo ("ui.undo", IconButton::Icon::Undo), redo ("ui.redo", IconButton::Icon::Redo),
+          play (b, params::play, "Play"), loop (b, params::loop, "Loop"), syncMode (b, params::syncMode, "Mode"),
+          startBar (b, params::startBar, "Start bar"), processor (p)
+    {
+        rewind.onClick = [this] { processor.rewind(); };
+        undo.onClick = [this] { if (onUndo) onUndo(); };
+        redo.onClick = [this] { if (onRedo) onRedo(); };
+        syncMode.setCaptionLeft (40);
+        startBar.setCaptionLeft (58);
+        snap.addItemList ({ "Off", "1/16", "1/8", "1/4", "1/2", "Bar" }, 1);
+        snap.setComponentID ("ui.snap");
+        snap.setSelectedId ((int) defaultSnap + 1, juce::dontSendNotification);
+        snap.onChange = [this] { if (onSnap) onSnap (getSnap()); };
+        snapCaption.setText ("Snap", juce::dontSendNotification);
+        snapCaption.setColour (juce::Label::textColourId, colours::dim);
+        snapCaption.setInterceptsMouseClicks (false, false);
+        for (auto* c : std::initializer_list<juce::Component*> { &rewind, &play, &loop, &syncMode, &startBar, &snapCaption, &snap, &undo, &redo, &now })
+            addAndMakeVisible (c);
+        setUndoState ({});
+    }
+
+    void TransportBar::setUndoState (const ChordZimmerProcessor::UndoState& u)
+    {
+        undo.setEnabled (u.canUndo);
+        redo.setEnabled (u.canRedo);
+    }
+
+    void TransportBar::setSnap (Snap s) { snap.setSelectedId ((int) s + 1, juce::dontSendNotification); }
+    Snap TransportBar::getSnap() const noexcept { return (Snap) juce::jlimit (0, (int) Snap::Bar, snap.getSelectedId() - 1); }
+
+    void TransportBar::resized()
+    {
+        auto r = getLocalBounds();
+        const auto place = [&r] (juce::Component& c, int w, int after = 6)
+        {
+            c.setBounds (r.removeFromLeft (w).withSizeKeepingCentre (w, juce::jmin (r.getHeight(), 28)));
+            r.removeFromLeft (after);
+        };
+        place (rewind, 32, 4);
+        place (play, 58, 4);
+        place (loop, 58, 14);
+        place (syncMode, 40 + 92, 12);
+        place (startBar, 58 + 64, 12);
+        place (snapCaption, 32, 0);
+        place (snap, 70, 12);
+        place (undo, 30, 4);
+        place (redo, 30, 12);
+        now.setBounds (r);
+    }
+
+    //==========================================================================
+    PerformancePanel::PerformancePanel (ChordZimmerProcessor& p, Bindings& b) : heard (p, b), bindings (b)
     {
         auto& strum = cards[0];
         strum.title = "Strum";
+        strum.infoKey = "card.strum";
         strum.controls = { &add (params::strum, "Direction"), &add (params::strumRate, "Rate") };
 
         auto& velocity = cards[1];
         velocity.title = "Velocity";
+        velocity.infoKey = "card.velocity";
         velocity.controls = { &add (params::velocity, "Curve"), &add (params::velocityPeak, "Peak"), &add (params::velocityRange, "Range") };
 
         auto& voicing = cards[2];
         voicing.title = "Voicing";
-        voicing.controls = { &add (params::voicing, "Voicing"), &add (params::bass), &add (params::stack),
-                             &add (params::voiceLeading, "Voice leading") };
-        voicing.controls[0]->setTooltip ("Open: the second-highest note an octave down. Spread: the lowest stays, the rest an octave up. "
-                                         "Wide: the second- and fourth-highest down");
-        voicing.controls[1]->setTooltip ("Bass: the chord's root (and its fifth) an octave below the chord");
-        voicing.controls.back()->setTooltip ("Smooth: each chord takes the inversion nearest the one before");
+        voicing.infoKey = "card.voicing";
+        voicing.controls = { &add (params::voicing, "Voicing"), &add (params::bass), &add (params::voiceLeading, "Voice leading"),
+                             &add (params::chordOctave, "Octave"), &add (params::stack) };
 
         auto& keys = cards[3];
-        keys.title = "Keys";
-        keys.controls = { &add (params::hold), &add (params::keyOctave, "Key octave") };
-        keys.controls[1]->setTooltip ("Key octave. Ignore: every octave plays the same chord. Follow: the octave you play moves the chord "
-                                      "(C2 plays it as written)");
+        keys.title = "Keys in";
+        keys.infoKey = "card.keys";
+        addAndMakeVisible (heard);
+        keys.controls = { &add (params::chordGroup, "Chord Group"), &add (params::progression), &add (params::hold),
+                          &add (params::keyOctave, "Key octave"), &heard, &add (params::detect) };
     }
 
-    ParamControl& EffectsPanel::add (const juce::String& paramId, const juce::String& label)
+    ParamControl& PerformancePanel::add (const juce::String& paramId, const juce::String& label)
     {
         auto* c = controls.add (new ParamControl (bindings, paramId, label));
         addAndMakeVisible (c);
         return *c;
     }
 
-    juce::String EffectsPanel::infoKeyAt (juce::Point<int> p) const
+    juce::String PerformancePanel::infoKeyAt (juce::Point<int> p) const
     {
-        static constexpr const char* keys[] = { "card.strum", "card.velocity", "card.voicing", "card.keys" };
-        for (size_t i = 0; i < cards.size(); ++i)
-            if (cards[i].bounds.contains (p))
-                return keys[i];
+        for (const auto& c : cards)
+            if (c.bounds.contains (p))
+                return c.infoKey;
         return {};
     }
 
-    void EffectsPanel::refresh (const UiModel&) {}
+    void PerformancePanel::refresh (const UiModel& m) { heard.refresh (m); }
 
-    int EffectsPanel::preferredHeight()
+    int PerformancePanel::preferredHeight()
     {
         const int card = titleHeight + controlHeight + 14;
-        return 2 * card + gap;
+        return 2 * margin + 3 * card + 2 * gap;
     }
 
-    void EffectsPanel::paint (juce::Graphics& g)
+    void PerformancePanel::paint (juce::Graphics& g)
     {
+        // A popover: a darker, nearly opaque card with a shadow, over the palette.
+        const auto r = getLocalBounds().toFloat().reduced (1.0f);
+        juce::Path shape;
+        shape.addRoundedRectangle (r, night::panelRadius);
+        juce::DropShadow (juce::Colours::black.withAlpha (0.6f), 16, { 0, 4 }).drawForPath (g, shape);
+        g.setColour (night::bgTop.withAlpha (0.97f));
+        g.fillPath (shape);
+        g.setColour (night::accent.withAlpha (0.35f));
+        g.strokePath (shape, juce::PathStrokeType (1.0f));
         for (const auto& c : cards)
         {
-            drawGlassPanel (g, c.bounds.toFloat());
+            drawGlassPanel (g, c.bounds.toFloat(), 10.0f);
             g.setColour (colours::dim);
             g.setFont (headingFont (11.5f, true));
-            g.drawText (c.title.toUpperCase(), c.bounds.reduced (14, 0).removeFromTop (titleHeight).translated (0, 3), juce::Justification::centredLeft);
+            g.drawText (c.title.toUpperCase(), c.bounds.reduced (12, 0).removeFromTop (titleHeight).translated (0, 3), juce::Justification::centredLeft);
         }
     }
 
-    void EffectsPanel::layoutCard (Card& c)
+    void PerformancePanel::layoutCard (Card& c)
     {
-        auto r = c.bounds.reduced (10, 0);
+        auto r = c.bounds.reduced (8, 0);
         r.removeFromTop (titleHeight + 2);
         auto row = r.removeFromTop (controlHeight);
         const int w = row.getWidth() / juce::jmax (1, (int) c.controls.size());
@@ -373,18 +470,18 @@ namespace chordzimmer::ui
             control->setBounds (row.removeFromLeft (w).reduced (3, 0));
     }
 
-    void EffectsPanel::resized()
+    void PerformancePanel::resized()
     {
-        auto r = getLocalBounds();
+        auto r = getLocalBounds().reduced (margin);
         const int card = titleHeight + controlHeight + 14;
-        for (int row = 0; row < 2; ++row)
-        {
-            auto line = r.removeFromTop (card);
-            r.removeFromTop (gap);
-            cards[(size_t) (2 * row)].bounds = line.removeFromLeft ((line.getWidth() - gap) / 2);
-            line.removeFromLeft (gap);
-            cards[(size_t) (2 * row + 1)].bounds = line;
-        }
+        auto line = r.removeFromTop (card);
+        cards[0].bounds = line.removeFromLeft ((line.getWidth() - gap) * 2 / 5);
+        line.removeFromLeft (gap);
+        cards[1].bounds = line;
+        r.removeFromTop (gap);
+        cards[2].bounds = r.removeFromTop (card);
+        r.removeFromTop (gap);
+        cards[3].bounds = r.removeFromTop (card);
         for (auto& c : cards)
             layoutCard (c);
     }

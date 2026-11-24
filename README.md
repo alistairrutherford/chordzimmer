@@ -13,12 +13,14 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
 
-**Status:** Phases 0–3 of 9 are done: the fork, the new identity and the **Night Studio** look
-(PLAN.md §5.1); the palette theory; the progression model; and timeline playback (Play follows
-Live from a start bar, or previews on its own clock). The editor is still ChordMonkey's layout
-(chord pads, a workspace of patterns, the performance cards), restyled, and nothing in it edits
-the progression yet; its Play no longer plays the workspace pattern. The palette, key navigator
-and timeline replace it in Phase 4.
+**Status:** Phases 0–4 of 9 are done: the fork, the new identity and the **Night Studio** look
+(PLAN.md §5.1); the palette theory; the progression model; timeline playback (Play follows Live
+from a start bar, or previews on its own clock); and the editor: the **palette** (click to hear,
+drag or double-click onto the timeline), the **key navigator** (◀ ▶ around the circle of fifths,
+the parallel modes, ⌂ Home), the **timeline** (sections of chords: drag to move, Alt-drag to
+copy, drag an edge to resize, snap, undo), the transport (Sync / Preview, Loop, Start bar) and a
+performance popover. Matching chords to notes (Phase 5), Chord Relations (Phase 6) and the
+selection's drag-out (Phase 7) are next.
 
 ## Build, test, install
 
@@ -32,10 +34,16 @@ Tests/run_tests.sh
 Tools/install.sh --validate
 ```
 
+```bash
+Tests/run_snapshot.sh
+```
+
 The first runs the core tests (plain C++, no JUCE). The second builds the VST3 and the Standalone
 (Release, universal), signs them ad hoc, installs them in `~/Library/Audio/Plug-Ins/VST3` and
-`~/Applications`, and runs `pluginval` at strictness 10. User presets live in
-`~/Music/ChordZimmer/Presets/`.
+`~/Applications`, and runs `pluginval` at strictness 10. The third builds the editor snapshot
+test (JUCE): it renders the editor against the reference images in `Tests/fixtures/snapshot`,
+scripts the timeline's and the palette's mouse gestures, and checks state and real-time safety.
+User presets live in `~/Music/ChordZimmer/Presets/`.
 
 ## In Live
 
