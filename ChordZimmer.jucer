@@ -57,6 +57,7 @@
         <FILE id="czF202" name="UndoList.h" compile="0" resource="0" file="Source/core/model/UndoList.h"/>
         <FILE id="czF203" name="TimelineLayout.h" compile="0" resource="0" file="Source/core/model/TimelineLayout.h"/>
         <FILE id="czF204" name="ChordFromNotes.h" compile="0" resource="0" file="Source/core/model/ChordFromNotes.h"/>
+        <FILE id="czF205" name="Relations.h" compile="0" resource="0" file="Source/core/model/Relations.h"/>
       </GROUP>
       <GROUP id="csGrp4" name="core/midiio">
         <FILE id="csF052" name="MidiFile.h" compile="0" resource="0" file="Source/core/midiio/MidiFile.h"/>

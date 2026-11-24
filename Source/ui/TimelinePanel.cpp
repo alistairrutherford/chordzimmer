@@ -374,6 +374,11 @@ namespace chordzimmer::ui
         return edit ("Octave", [&] (ChordProgression& q, Selection&) { return q.setOctave (r, v); });
     }
 
+    bool TimelinePanel::replaceChordWith (ChordRef r, const WorkspaceChord& c)
+    {
+        return edit ("Replace chord", [&] (ChordProgression& q, Selection&) { return q.replaceChord (r, c); });
+    }
+
     bool TimelinePanel::setBass (ChordRef r, int pc)
     {
         return edit ("Bass note", [&] (ChordProgression& q, Selection&) { return q.setBass (r, pc); });
@@ -961,7 +966,19 @@ namespace chordzimmer::ui
             const int pc = (homeKey + k) % 12;
             bass.addItem (juce::String (sp.name (pc)), true, c->bass == pc, [self, r, pc] { if (self) self->setBass (r, pc); });
         }
+        // Replace with ▸ (PLAN.md §3.5): its substitutes, then the palette chords nearest it.
+        juce::PopupMenu replace;
+        for (const auto& rep : replacementsFor (*c, homeKey, homeScale))
+        {
+            auto with = *c;
+            with.chord = rep.chord;
+            const auto label = labelFor (with);
+            replace.addItem (juce::String::fromUTF8 (label.name.c_str()) + "  (" + juce::String::fromUTF8 (label.numeral.c_str()) + ")  "
+                                 + juce::String::fromUTF8 ("\xe2\x80\x94 ") + juce::String::fromUTF8 (rep.reason.c_str()),
+                             [self, r, chord = rep.chord] { if (self) self->replaceChordWith (r, chord); });
+        }
         menu.addSectionHeader (juce::String::fromUTF8 (labelFor (*c).name.c_str()));
+        menu.addSubMenu (juce::String::fromUTF8 ("Replace with"), replace, replace.getNumItems() > 0);
         menu.addSubMenu ("Inversion", inversion);
         menu.addSubMenu ("Octave", octave);
         menu.addSubMenu ("Bass note", bass);

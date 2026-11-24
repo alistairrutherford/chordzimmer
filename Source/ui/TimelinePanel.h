@@ -10,7 +10,8 @@
 //   chord row   pills in their family's gradient (filled in key, a ring out of it), the name and
 //               numeral in the home key. Click selects and sounds it, drag moves (Alt: a copy,
 //               anywhere, also between sections), drag its right edge for its duration,
-//               right-click for inversion, octave, bass, duplicate, delete
+//               right-click for inversion, octave, bass, Replace with ▸ (PLAN.md §3.5: its
+//               substitutes and the palette chords nearest it, Relations.h), duplicate, delete
 //   empty space and the gaps between sections: a click puts the insertion marker there (Paste
 //               and the palette's double-click go to it); a palette chord dropped there makes a
 //               new section
@@ -26,6 +27,7 @@
 
 #include "Keyboards.h"
 #include "Theme.h"
+#include "../core/model/Relations.h"
 #include "../core/model/TimelineLayout.h"
 
 namespace chordzimmer::ui
@@ -99,6 +101,7 @@ namespace chordzimmer::ui
         bool setInversion (ChordRef, int);
         bool setOctave (ChordRef, int);
         bool setBass (ChordRef, int pitchClass);
+        bool replaceChordWith (ChordRef, const WorkspaceChord&);         // Replace with ▸ (Phase 6)
         void startRenaming (int section);
         bool isRenaming() const noexcept { return renaming >= 0; }
 

@@ -39,6 +39,8 @@ namespace chordzimmer::ui
               "Sections of chords. Drag a chord or tab to move it (Alt: copy), its edge to resize; Shift-click selects more; right-click for more." },
 
             // ---- The palette -----------------------------------------------------------------
+            { "ui.relations", "Relations", "Shows how each chord relates to the one last clicked or selected: its function (V/vi, IV, rel, sub), notes in common (dots), voices' moves." },
+            { "display.next", "Next", "Five chords that usually follow the one last clicked or selected. Click to hear, double-click to add at the marker." },
             { "display.palette", "Palette",
               "The chords of the palette's key by degree and complexity. Filled: in the home key; ring: not. Click to hear, drag to the timeline." },
 

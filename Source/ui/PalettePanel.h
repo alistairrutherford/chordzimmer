@@ -15,15 +15,43 @@
 // add it at the timeline's insertion marker; right-click to add it there or as a new section.
 // While the Match popover is open (MatchPanel.h), the matched cells carry their rank and the
 // others fade.
+//
+// Chord Relations (PLAN.md §3.5, Phase 6; Relations.h), the toggle in the title row: for the
+// focus chord (the cell last clicked, or the timeline chord selected) every cell shows its
+// function as an amber tag (V/vi, IV/vi, rel, sub), its notes in common with the focus as dots
+// and its voice-leading distance as a number; cells with no function and under two notes in
+// common fade; the focus has a white ring. Next ▸, beside the toggle, suggests five follow-ups
+// (click to hear, double-click to add at the marker).
 #pragma once
 
 #include "Keyboards.h"
 #include "Theme.h"
 #include "../core/theory/CircleOfFifths.h"
 #include "../core/theory/PaletteBuilder.h"
+#include "../core/model/Relations.h"
 
 namespace chordzimmer::ui
 {
+    // Next ▸: the focus's suggested follow-ups as small chips.
+    class NextStrip : public juce::Component
+    {
+    public:
+        NextStrip();
+        void setChords (const std::vector<PaletteCell>&);
+        const std::vector<PaletteCell>& getChords() const noexcept { return chords; }
+        juce::Rectangle<float> chipBounds (int) const;
+        int chipAt (juce::Point<float>) const;
+        void paint (juce::Graphics&) override;
+        void mouseDown (const juce::MouseEvent&) override;
+        void mouseUp (const juce::MouseEvent&) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override;
+        std::function<void (const ProgressionChord&)> onPreview, onAdd;
+        std::function<void()> onEndPreview;
+
+    private:
+        std::vector<PaletteCell> chords;
+    };
+
     class PalettePanel : public juce::Component,
                          public juce::SettableTooltipClient
     {
@@ -46,6 +74,17 @@ namespace chordzimmer::ui
         void setMatchRanks (const std::vector<std::pair<int, int>>& cellRanks, bool active);
         int matchRank (int variant, int degree) const noexcept;   // 0: none
         bool matchShown() const noexcept { return matchActive; }
+
+        // Chord Relations (Phase 6): the focus (its numeral in the home key, and whether it is the
+        // home tonic); the relations shown while the toggle is on.
+        void setFocus (const ChordId&, const std::string& numeral, bool tonic);
+        const ChordId& getFocus() const noexcept { return focus; }
+        bool relationsShown() const noexcept { return relationsButton.getToggleState(); }
+        void showRelations (bool);
+        const Relation& relationOf (int variant, int degree) const noexcept { return relations[(size_t) variant][(size_t) degree]; }
+        std::function<void (const PaletteCell&)> onFocus;   // a cell was clicked
+        juce::TextButton relationsButton { "Relations" };
+        NextStrip next;
 
         // Rows: `firstRow` is the bottom one shown (a variant index, 0 = "5").
         int firstRow() const noexcept { return bottomRow; }
@@ -86,6 +125,7 @@ namespace chordzimmer::ui
         float rowHeight() const;
         void endPreview();
         void showMenu (CellRef);
+        void updateRelations();
 
         ChordZimmerProcessor& processor;
         PaletteContext context;
@@ -101,7 +141,11 @@ namespace chordzimmer::ui
         float pulse = 0.0f;
         std::array<std::array<int8_t, numPaletteColumns>, numTierVariants> ranks {};
         bool matchActive = false;
+        ChordId focus;
+        std::string focusNumeral;
+        bool focusTonic = false;
+        std::array<std::array<Relation, numPaletteColumns>, numTierVariants> relations {};
 
-        static constexpr int padding = 10, titleHeight = 18, headerHeight = 30, labelWidth = 52, scrollWidth = 6;
+        static constexpr int padding = 10, titleHeight = 22, headerHeight = 30, labelWidth = 52, scrollWidth = 6;
     };
 }

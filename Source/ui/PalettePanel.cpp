@@ -16,9 +16,87 @@ namespace chordzimmer::ui
         }
     }
 
+    //==========================================================================
+    NextStrip::NextStrip() { setComponentID ("display.next"); }
+
+    void NextStrip::setChords (const std::vector<PaletteCell>& c)
+    {
+        const bool same = c.size() == chords.size()
+                       && std::equal (c.begin(), c.end(), chords.begin(), [] (const PaletteCell& a, const PaletteCell& b) { return a.name == b.name && a.root == b.root; });
+        if (same)
+            return;
+        chords = c;
+        repaint();
+    }
+
+    juce::Rectangle<float> NextStrip::chipBounds (int i) const
+    {
+        const auto r = getLocalBounds().toFloat().withTrimmedLeft (44.0f);
+        const float w = juce::jmin (64.0f, r.getWidth() / 5.0f);
+        return { r.getX() + w * (float) i, r.getY(), w - 4.0f, r.getHeight() };
+    }
+
+    int NextStrip::chipAt (juce::Point<float> p) const
+    {
+        for (int i = 0; i < (int) chords.size(); ++i)
+            if (chipBounds (i).contains (p))
+                return i;
+        return -1;
+    }
+
+    void NextStrip::paint (juce::Graphics& g)
+    {
+        g.setColour (colours::dim);
+        g.setFont (font (11.0f, true));
+        g.drawText (juce::String::fromUTF8 ("Next \xe2\x96\xb8"), getLocalBounds().removeFromLeft (44), juce::Justification::centredLeft);
+        if (chords.empty())
+        {
+            g.setColour (colours::faint);
+            g.setFont (font (11.0f));
+            g.drawText ("click a chord", getLocalBounds().withTrimmedLeft (44), juce::Justification::centredLeft);
+            return;
+        }
+        for (int i = 0; i < (int) chords.size(); ++i)
+        {
+            const auto& c = chords[(size_t) i];
+            const auto r = chipBounds (i);
+            drawChordOrb (g, r, c.family, c.inKey, 0.0f, r.getHeight() * 0.5f);
+            g.setColour (c.inKey && c.family == ChordFamily::Major ? night::bgTop : night::text);
+            g.setFont (headingFont (11.0f, true));
+            g.drawFittedText (juce::String::fromUTF8 (c.name.c_str()), r.toNearestInt().reduced (4, 0), juce::Justification::centred, 1, 0.6f);
+        }
+    }
+
+    void NextStrip::mouseDown (const juce::MouseEvent& e)
+    {
+        if (const int i = chipAt (e.position); i >= 0 && onPreview)
+            onPreview (progressionChordFromCell (chords[(size_t) i]));
+    }
+
+    void NextStrip::mouseUp (const juce::MouseEvent&)
+    {
+        if (onEndPreview)
+            onEndPreview();
+    }
+
+    void NextStrip::mouseDoubleClick (const juce::MouseEvent& e)
+    {
+        if (const int i = chipAt (e.position); i >= 0 && onAdd)
+            onAdd (progressionChordFromCell (chords[(size_t) i]));
+    }
+
+    //==========================================================================
     PalettePanel::PalettePanel (ChordZimmerProcessor& p) : processor (p)
     {
         setComponentID ("display.palette");
+        relationsButton.setComponentID ("ui.relations");
+        relationsButton.setClickingTogglesState (true);
+        relationsButton.onClick = [this] { showRelations (relationsButton.getToggleState()); };
+        addAndMakeVisible (relationsButton);
+        next.onPreview = [this] (const ProgressionChord& c) { processor.previewChord (c); };
+        next.onEndPreview = [this] { processor.endPreview(); };
+        next.onAdd = [this] (const ProgressionChord& c) { if (onAdd) onAdd (c); };
+        addChildComponent (next);
         context.paletteKey = -1;                  // so the first setContext builds
         setContext ({});
         bottomRow = juce::jmax (0, triadRow() - 1);   // PLAN.md §3.1: the triads in view at first
@@ -33,6 +111,7 @@ namespace chordzimmer::ui
         context = c;
         grid = buildPalette (context);
         spelling = makeSpelling (context.paletteKey, context.paletteScale);
+        updateRelations();
         repaint();
     }
 
@@ -61,6 +140,30 @@ namespace chordzimmer::ui
         ranks = next;
         matchActive = active;
         repaint();
+    }
+
+    void PalettePanel::setFocus (const ChordId& f, const std::string& numeral, bool tonic)
+    {
+        if (f == focus && numeral == focusNumeral && tonic == focusTonic)
+            return;
+        focus = f;
+        focusNumeral = numeral;
+        focusTonic = tonic;
+        updateRelations();
+        repaint();
+    }
+
+    void PalettePanel::showRelations (bool shown)
+    {
+        relationsButton.setToggleState (shown, juce::dontSendNotification);
+        next.setVisible (shown);
+        repaint();
+    }
+
+    void PalettePanel::updateRelations()
+    {
+        relations = paletteRelations (grid, focus, focusNumeral, focusTonic);
+        next.setChords (nextChords (focus, context.homeKey, context.homeScale));
     }
 
     int PalettePanel::matchRank (int v, int d) const noexcept
@@ -163,6 +266,9 @@ namespace chordzimmer::ui
 
     void PalettePanel::resized()
     {
+        const auto title = getLocalBounds().reduced (padding).removeFromTop (titleHeight);
+        relationsButton.setBounds (title.withX (title.getX() + 70).withWidth (78).reduced (0, 1));
+        next.setBounds (title.withX (title.getX() + 160).withWidth (juce::jmax (0, juce::jmin (380, title.getWidth() - 160 - 210))).reduced (0, 1));
         scrollRows (0);   // keep the rows within range at the new height
     }
 
@@ -250,7 +356,10 @@ namespace chordzimmer::ui
                 const float glow = lit ? night::glowIdle + (night::glowPlay - night::glowIdle) * pulse
                                        : (hover || down ? night::glowHover : night::glowIdle * 0.6f);
                 const int rank = matchActive ? matchRank (v, d) : 0;
-                const bool faded = matchActive && rank == 0;
+                const auto& relation = relations[(size_t) v][(size_t) d];
+                const bool showRel = ! matchActive && relationsShown() && focus.valid();
+                const bool isFocus = showRel && ChordId::of (c) == focus;
+                const bool faded = (matchActive && rank == 0) || (showRel && ! isFocus && ! relation.related());
                 if (faded)
                     g.beginTransparencyLayer (0.3f);
                 drawChordOrb (g, orb, c.family, c.inKey, glow, orb.getHeight() * 0.5f);
@@ -272,6 +381,37 @@ namespace chordzimmer::ui
                 g.drawFittedText (juce::String::fromUTF8 (c.numeral.c_str()), text.toNearestInt(), juce::Justification::centredTop, 1, 0.6f);
                 if (faded)
                     g.endTransparencyLayer();
+                if (isFocus)
+                {
+                    g.setColour (juce::Colours::white.withAlpha (0.9f));
+                    g.drawRoundedRectangle (orb.expanded (2.5f), orb.getHeight() * 0.5f + 2.5f, 1.5f);
+                }
+                if (showRel && ! isFocus && ! faded)
+                {
+                    // The function (an amber tag at the top right), the notes in common (dots at
+                    // the bottom left) and the voice-leading distance (a number at the bottom right).
+                    if (! relation.label.empty())
+                    {
+                        const auto tagText = juce::String::fromUTF8 (relation.label.c_str());
+                        const float w = (float) juce::GlyphArrangement::getStringWidthInt (font (9.5f, true), tagText) + 8.0f;
+                        const auto tag = juce::Rectangle<float> (w, 13.0f).withPosition (orb.getRight() - w + 4.0f, orb.getY() - 5.0f);
+                        g.setColour (night::accent);
+                        g.fillRoundedRectangle (tag, 6.5f);
+                        g.setColour (night::bgTop);
+                        g.setFont (font (9.5f, true));
+                        g.drawText (tagText, tag, juce::Justification::centred);
+                    }
+                    g.setColour (night::accent.withAlpha (0.95f));
+                    for (int k = 0; k < juce::jmin (relation.common, 4); ++k)
+                        g.fillEllipse (orb.getX() + 7.0f + 5.0f * (float) k, orb.getBottom() - 4.5f, 3.0f, 3.0f);
+                    if (relation.distance > 0)
+                    {
+                        g.setColour (colours::dim);
+                        g.setFont (font (9.0f, true));
+                        g.drawText (juce::String (relation.distance), juce::Rectangle<float> (16.0f, 10.0f).withPosition (orb.getRight() - 15.0f, orb.getBottom() - 9.0f),
+                                    juce::Justification::centredRight);
+                    }
+                }
                 if (rank > 0)
                 {
                     // The match's rank: an amber badge on the orb's top-left (PLAN.md §5.1).
@@ -321,6 +461,8 @@ namespace chordzimmer::ui
         }
         processor.previewChord (progressionChordFromCell (*cell (ref)));
         previewing = true;
+        if (onFocus)
+            onFocus (*cell (ref));
         repaint();
     }
 

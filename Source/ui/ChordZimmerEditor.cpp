@@ -53,6 +53,11 @@ namespace chordzimmer
         match.onAdd = [this] (const ProgressionChord& c) { timeline.addChord (c); };
         palette.onAdd = [this] (const ProgressionChord& c) { timeline.addChord (c); };
         palette.onAddAsSection = [this] (const ProgressionChord& c) { timeline.addChordAsSection (c); };
+        palette.onFocus = [this] (const PaletteCell& c)
+        {
+            focusChosen = true;
+            setFocus (ChordId::of (c), c.numeral);
+        };
         transport.onUndo = [this] { undo(); };
         transport.onRedo = [this] { redo(); };
         transport.onSnap = [this] (Snap s)
@@ -119,6 +124,12 @@ namespace chordzimmer
         const int w = juce::jmin (width, getWidth() - 24);
         const auto anchor = navigator.getBounds();
         c.setBounds (anchor.getRight() - w, anchor.getY() - height - 6, w, height);
+    }
+
+    void ChordZimmerEditor::setFocus (const ChordId& f, const std::string& numeral)
+    {
+        const auto bare = relations_detail::bareNumeral (numeral);
+        palette.setFocus (f, numeral, bare == "I" || bare == "i");
     }
 
     void ChordZimmerEditor::placeMatch()
@@ -365,6 +376,26 @@ namespace chordzimmer
         }
         else
             transport.now.set ({}, {}, where);
+
+        // Chord Relations' focus (PLAN.md §3.5): a timeline chord newly selected; else the last
+        // palette cell clicked; else the home tonic.
+        const ChordRef selectedChord = timeline.selectedChord();
+        if (const auto* c = prog.chord (selectedChord);
+            c != nullptr && (selectedChord != focusedTimelineChord || processor.progressionVersion() != focusedVersion))
+        {
+            focusChosen = true;
+            setFocus (ChordId::of (*c), timelineChordLabel (*c, m.settings.key, m.settings.scale).numeral);
+        }
+        focusedTimelineChord = selectedChord;
+        focusedVersion = processor.progressionVersion();
+        if (! focusChosen)
+        {
+            PaletteContext homeCtx;
+            homeCtx.paletteKey = homeCtx.homeKey = m.settings.key;
+            homeCtx.paletteScale = homeCtx.homeScale = m.settings.scale;
+            const auto tonic = buildPaletteCell (homeCtx, 3, 0, makeSpelling (m.settings.key, m.settings.scale));
+            setFocus (ChordId::of (tonic), tonic.numeral);
+        }
 
         const auto* sounding = prog.chord (chordAtOrder (prog, m.playingChord));
         palette.setSounding (sounding != nullptr ? sounding->pitchClasses() : 0u, sounding != nullptr ? sounding->root() : -1, m.playhead);

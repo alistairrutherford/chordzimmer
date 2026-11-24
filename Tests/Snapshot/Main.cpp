@@ -35,6 +35,8 @@
 //                  allocation), the matches and the palette's rank badges, the note picker,
 //                  ±2 fifths, Chord from notes' Add and Set, Clear, one popover at a time,
 //                  Listen restored with the state; the editor-match snapshot
+//  12. Relations   (Phase 6) the focus (the home tonic, a palette click, a timeline selection),
+//                  the palette's tags and fading, Next ▸, Replace with; editor-relations
 //  11. Drag MIDI   (Phase 7) the timeline's drag-out: everything or the selection, named after it,
 //                  the render (Bass included) with section markers, Alt for chords only
 //
@@ -347,6 +349,7 @@ static void testSnapshots (const juce::File& fixtures, const juce::File& out, bo
                              small ? ChordZimmerEditor::minHeight : ChordZimmerEditor::defaultHeight);
             editor->showKeyboard (! small);
             juce::StringArray found, unreachable;
+            editor->getPalette().showRelations (true);   // (Next ▸ shows only then)
             for (const int popover : { 0, 1, 2 })   // none, Performance, Match
             {
                 editor->showPerformance (popover == 1);
@@ -367,6 +370,7 @@ static void testSnapshots (const juce::File& fixtures, const juce::File& out, bo
         }
         editor->showPerformance (false);
         editor->showMatch (false);
+        editor->getPalette().showRelations (false);
         editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
         editor->showKeyboard (true);
         editor->refreshNow();
@@ -953,6 +957,69 @@ static void testDragOut()
     closeEditor (*p, editor);
 }
 
+//==============================================================================
+// 12: Chord Relations (Phase 6, PLAN.md §3.5).
+
+static void testRelations (const juce::File& fixtures, const juce::File& out, bool update)
+{
+    std::cout << "== Chord Relations ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    p->setProgression (song());
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->showKeyboard (true);
+    editor->refreshNow();
+    auto& palette = editor->getPalette();
+    auto& t = editor->getTimeline();
+    const auto nextNames = [&]
+    {
+        juce::StringArray n;
+        for (const auto& c : palette.next.getChords())
+            n.add (juce::String::fromUTF8 (c.name.c_str()));
+        return n.joinIntoString (" ");
+    };
+
+    palette.relationsButton.setToggleState (true, juce::sendNotificationSync);
+    palette.relationsButton.onClick();
+    check (palette.relationsShown() && palette.next.isVisible(), "the Relations toggle shows them, and Next");
+    check (palette.getFocus().root == 0 && palette.relationOf (3, 3).label == "IV" && palette.relationOf (3, 4).label == "V"
+               && palette.relationOf (3, 5).label == "rel" && nextNames() == "F G7 Am Dm Em",
+           "with nothing chosen the focus is the home tonic, C: F IV, G V, Am rel; Next F G7 Am Dm Em");
+
+    // A click on a palette cell (Am) makes it the focus.
+    const ui::PalettePanel::CellRef am { 3, 5 };
+    const auto at = palette.cellBounds (am).getCentre();
+    palette.mouseDown (mouse (palette, at));
+    palette.mouseUp (mouse (palette, at, {}));
+    editor->refreshNow();
+    check (palette.getFocus().root == 9 && palette.relationOf (3, 0).label == "rel" && palette.relationOf (3, 1).label == "iv/vi"
+               && palette.relationOf (3, 0).common == 2 && palette.relationOf (3, 0).distance == 2 && nextNames() == "Dm F G7 Em C",
+           "clicking Am: C rel (2 in common, 2 apart), Dm iv/vi; Next Dm F G7 Em C (" + nextNames() + ")");
+    snapshot (*editor, "editor-relations", fixtures, out, update);
+
+    // Selecting a timeline chord (the Verse's G) makes it the focus.
+    t.setSelection (Selection::chord (0, 3));
+    editor->refreshNow();
+    check (palette.getFocus().root == 7 && palette.relationOf (3, 0).label == "IV/V" && nextNames() == "C Am F Em Dm",
+           "selecting the Verse's G: C is IV/V; Next C Am F Em Dm (" + nextNames() + ")");
+
+    // Next ▸: a double-click adds it at the marker (after G).
+    palette.next.mouseDoubleClick (mouse (palette.next, palette.next.chipBounds (0).getCentre(), juce::ModifierKeys::leftButtonModifier, 2));
+    check (layout (p->getProgression()).startsWith ("Verse[C:4 Am:4 F:4 G:4 C:4]"), "double-clicking Next's C adds it after G");
+
+    // Replace with ▸: the first replacement for the Verse's first C (a 3rd below: Am).
+    const auto list = replacementsFor (*p->getProgression().chord ({ 0, 0 }), 0, Scale::Major);
+    check (! list.empty() && t.replaceChordWith ({ 0, 0 }, list.front().chord) && layout (p->getProgression()).startsWith ("Verse[Am:4 Am:4")
+               && p->undoState().undoLabel == "Replace chord",
+           "Replace with ▸ (" + juce::String (list.empty() ? "" : list.front().reason) + "): the Verse's C becomes Am, one undo step");
+
+    palette.showRelations (false);
+    check (! palette.next.isVisible(), "toggled off: Next hides");
+    closeEditor (*p, editor);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -976,6 +1043,7 @@ int main (int argc, char** argv)
     testRealTime();
     testMatch (fixtures, out, update);
     testDragOut();
+    testRelations (fixtures, out, update);
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;

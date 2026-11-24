@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased: Phase 6, Chord Relations
+
+PLAN.md §6, Phase 6; §3.5.
+
+- **Relations** (a toggle in the palette's title row): for the chord last clicked in the palette
+  or selected on the timeline (the home tonic until then), every palette chord shows how it
+  relates: its **function** as an amber tag (V/vi and V7/vi for a dominant, IV/vi or iv/vi for a
+  subdominant, rel for the relative major or minor, sub for a tritone substitute), its **notes in
+  common** as dots, and its **voice-leading distance** (the fewest semitones the voices move) as
+  a number. Chords with no function and under two notes in common fade; the focus has a white
+  ring.
+- **Next ▸** beside the toggle: five chords that usually follow the focus, from a transition table
+  of our own (one for major homes, one for minor); a secondary dominant suggests its target
+  first. Click to hear, double-click to add at the insertion marker.
+- **Replace with ▸** in a timeline chord's right-click menu: its substitutes (a 3rd below and
+  above, parallel, sus, the 9th, the 7th, tritone sub), then the palette chords sharing two or
+  more notes with it, nearest first. One undo step.
+- Tests: `test_relations` (C major and A minor worked out by hand: functions, common tones,
+  distances, Next, Replace with); the snapshot test checks the focus from the palette and the
+  timeline, Next and Replace with, with a new reference image (`editor-relations`).
+
 ## Unreleased: Phase 7, the selection's drag-out
 
 PLAN.md §6, Phase 7; §3.7.

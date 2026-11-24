@@ -93,6 +93,7 @@ namespace chordzimmer
         void placePopover (juce::Component&, int width, int height);
         void updateMatch();
         void placeMatch();
+        void setFocus (const ChordId&, const std::string& numeral);   // Chord Relations' focus (Phase 6)
 
         ChordZimmerProcessor& processor;
         ui::LookAndFeel lookAndFeel;
@@ -109,6 +110,9 @@ namespace chordzimmer
         ui::OutputKeyboard outputKeys;
         ui::InfoView info;
         bool sizeRestored = false;      // until then, resized() leaves the saved size alone
+        ChordRef focusedTimelineChord;  // the timeline chord the focus last came from
+        uint32_t focusedVersion = 0;
+        bool focusChosen = false;       // a cell or a timeline chord was chosen (else: the home tonic)
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChordZimmerEditor)
     };

@@ -149,6 +149,7 @@
 		67B3B8B7AF25536C890907CD /* Panels.h */ /* Panels.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Panels.h; path = ../../Source/ui/Panels.h; sourceTree = SOURCE_ROOT; };
 		6AD1CFE674922F7BFCB79326 /* ChordZimmerProcessor.cpp */ /* ChordZimmerProcessor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ChordZimmerProcessor.cpp; path = ../../Source/plugin/ChordZimmerProcessor.cpp; sourceTree = SOURCE_ROOT; };
 		6B3E58216AA799E0690835CD /* ChordZimmerProcessor.h */ /* ChordZimmerProcessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChordZimmerProcessor.h; path = ../../Source/plugin/ChordZimmerProcessor.h; sourceTree = SOURCE_ROOT; };
+		6C178C76270ACB41B55676B8 /* Relations.h */ /* Relations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Relations.h; path = ../../Source/core/model/Relations.h; sourceTree = SOURCE_ROOT; };
 		75156CED8814C7D4CB68AEAB /* ChordModel.h */ /* ChordModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChordModel.h; path = ../../Source/core/theory/ChordModel.h; sourceTree = SOURCE_ROOT; };
 		774B652051740EB06EC3C8C4 /* InfoView.cpp */ /* InfoView.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = InfoView.cpp; path = ../../Source/ui/InfoView.cpp; sourceTree = SOURCE_ROOT; };
 		7B44A4C4BE642C337668DC6E /* PalettePanel.h */ /* PalettePanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PalettePanel.h; path = ../../Source/ui/PalettePanel.h; sourceTree = SOURCE_ROOT; };
@@ -404,6 +405,7 @@
 				8A81D7F58C6E472531D49178,
 				FE7BA8BC8A96ED2517977BF2,
 				8D101D9B4D0F2F05A959795E,
+				6C178C76270ACB41B55676B8,
 			);
 			name = core/model;
 			sourceTree = "<group>";
