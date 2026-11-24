@@ -123,11 +123,26 @@ namespace chordzimmer
 
         // The progression (PLAN.md §3.3): sections of chords. Not parameters; saved with the state
         // and in presets, next to the workspace. Any thread except the audio thread (a lock); the
-        // audio thread doesn't use it until Phase 3, which hands it over through a
-        // SnapshotExchange. A change the host should save marks the state changed. The editor's
-        // undo history (UndoList.h) arrives with the timeline in Phase 4.
+        // audio thread plays it as a Timeline (ProgressionPlayer.h) handed over through a
+        // SnapshotExchange whenever it or the loop selection changes. A change the host should
+        // save marks the state changed. The editor's undo history (UndoList.h) arrives with the
+        // timeline UI in Phase 4.
         ChordProgression getProgression() const;
         void setProgression (const ChordProgression&);
+
+        // The selection the loop region follows (PLAN.md §3.3: the selected chords and sections,
+        // else everything). Editor state: not saved.
+        Selection getLoopSelection() const;
+        void setLoopSelection (const Selection&);
+
+        // Transport (PLAN.md §3.3): ⏮ for Preview's own clock (Sync follows the host). Any thread.
+        void rewind() noexcept { engine.requestRewind(); }
+
+        // Previews (PLAN.md §3.1; message thread, lock-free): `chord` sounds through the effects
+        // from the next block, until endPreview, or for `beats` if > 0. A new preview replaces
+        // the last.
+        void previewChord (const ProgressionChord& chord, double beats = 0.0) noexcept;
+        void endPreview() noexcept;
 
         // The progression as the state and presets save it (progressionToText in a PROGRESSION
         // child), and back: missing or unreadable text comes back empty.
@@ -186,6 +201,12 @@ namespace chordzimmer
         // lines starting with # are skipped.
         static juce::File testWorkspaceFile();
 
+        // While Test workspace is on, the progression is also loaded from this file whenever it
+        // changes (Phase 3, for the bridge's checks in Live): each line is a section, "Name |
+        // numerals" (ChordSets.h; up to 8 chords, a bar each unless ":beats"), in the current
+        // Key; lines starting with # are skipped.
+        static juce::File testProgressionFile();
+
         // While Test workspace is on, keys are also played from this file (Phase 3, for the
         // bridge's checks in Live, whose bridge can't launch a clip): each line is "beat note
         // length" (song position and length in beats), played while the host plays, as host
@@ -196,7 +217,9 @@ namespace chordzimmer
         std::atomic<int> lastChordSlot { -1 };
         std::atomic<int> soundingNotes { 0 };
         std::atomic<bool> transportPlaying { false };
-        std::atomic<int> playingPattern { 0 }, playingSlot { -1 };   // the pattern playing and its slot sounding (-1: none)
+        std::atomic<int> playingPattern { 0 }, playingSlot { -1 };   // the workspace pattern playing: none since Phase 3
+        std::atomic<int> playingChord { -1 };                          // the timeline chord sounding (an index in order), or -1
+        std::atomic<double> playhead { -1.0 };                         // the timeline position (beats), or -1 when not playing
         std::atomic<double> hostBpm { 120.0 };                        // the host's last tempo and meter
         std::atomic<int> hostNumerator { 4 }, hostDenominator { 4 };
         std::atomic<uint64_t> keyGuess { KeyGuess().pack() };
@@ -246,7 +269,7 @@ namespace chordzimmer
         int heardModeWritten = -1;
         void writeHeardKey();
         void readTestWorkspace();
-        juce::Time testWorkspaceRead, testKeysRead;
+        juce::Time testWorkspaceRead, testKeysRead, testProgressionRead;
 
         struct TestKeys
         {
@@ -262,6 +285,13 @@ namespace chordzimmer
         SnapshotExchange<Workspace> workspaceForAudio;   // written under workspaceLock
         mutable juce::CriticalSection progressionLock;
         ChordProgression progression;
+        Selection loopSelection;
+        SnapshotExchange<Timeline> timelineForAudio;     // written under progressionLock
+        void publishTimeline();                          // under progressionLock
+
+        std::array<PreviewRequest, 32> previewRequests {};
+        juce::AbstractFifo previewFifo { 32 };
+        void pushPreview (const PreviewRequest&) noexcept;
         std::atomic<int> currentProgram { 0 }, pendingProgram { -1 };
         void loadProgram (int index);
 

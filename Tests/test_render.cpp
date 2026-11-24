@@ -1,5 +1,6 @@
-// Pattern render tests (ChordMonkey's PLAN.md §3.6, §7; Phase 6, G9): a pattern's drag-out MIDI is the notes
-// the engine plays from it under a host (FakeHost.h), to the tick: chords only, with bass and
+// Render tests (ChordMonkey's PLAN.md §3.6, §7; Phase 6, G9; PLAN.md §3.7): a pattern's drag-out MIDI (now
+// rendered as a one-section progression, Phase 3) is the notes the engine plays from the same
+// timeline under a host (FakeHost.h), to the tick: chords only, with bass and
 // voicing, strummed, voice-led, at other tempos and meters; the file round-trips through
 // the MIDI writer and reader; an empty pattern renders nothing.
 #include "FakeHost.h"
@@ -25,9 +26,8 @@ namespace
         Host h (rate, bpm);
         h.numerator = num;
         h.denominator = den;
-        h.engine->setWorkspace (ws);
+        h.engine->setTimeline (makeTimeline (progressionFromPattern (ws.patterns[(size_t) index])));
         s.play = true;
-        s.pattern = index;
         h.settings = s;
         const double beats = ws.patterns[(size_t) index].totalHalfBeats() * 0.5;
         h.run (h.at (beats), block);
@@ -99,8 +99,8 @@ static void testChordsOnly()
     };
     bool ok = song.notes.size() == want.size();
     for (size_t i = 0; ok && i < want.size(); ++i)
-        ok = song.notes[i].start == want[i].start && song.notes[i].end == want[i].end && song.notes[i].pitch == want[i].pitch && song.notes[i].velocity == 100;
-    check (ok, "B = I V vi:2 IV:6, chords only: C G Am F held for 4, 4, 2 and 6 beats, ticks exact (" + std::to_string (song.notes.size()) + " notes)");
+        ok = song.notes[i].start == want[i].start && song.notes[i].end == want[i].end && song.notes[i].pitch == want[i].pitch && song.notes[i].velocity == s.fx.velocity.peak;
+    check (ok, "B = I V vi:2 IV:6, chords only: C G Am F held for 4, 4, 2 and 6 beats, ticks exact, at Velocity peak (" + std::to_string (song.notes.size()) + " notes)");
     check (song.bpm == 120.0 && song.ppq == 960 && song.name == "ChordZimmer", "the song's tempo, resolution and name");
     check (renderPattern (ws, 0, s, 120.0).notes.empty() && renderPattern (ws, 7, s, 120.0).notes.empty(), "an empty pattern, or no such pattern, renders nothing");
 }

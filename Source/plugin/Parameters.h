@@ -45,9 +45,10 @@ namespace chordzimmer::params
     inline constexpr const char* analyse       = "analyse";
     enum class AnalyseMode { Off, Listen, UseGuess };
 
-    // Pattern playback (appended; ChordMonkey's PLAN.md §3.2, Phase 2): Play (the current pattern plays in
-    // time while the host plays) and Pattern (A-D; a switch while playing waits for the bar).
-    // Pattern is in presets since Phase 5 (they hold the workspace); Play isn't.
+    // Pattern playback (appended; ChordMonkey's PLAN.md §3.2, Phase 2): Play and Pattern (A-D). Since
+    // ChordZimmer's Phase 3, Play plays the progression's timeline (see Sync mode below) and
+    // Pattern only picks the workspace pattern the editor shows. Pattern is in presets since
+    // Phase 5 (they hold the workspace); Play isn't.
     inline constexpr const char* play          = "play";
     inline constexpr const char* pattern       = "pattern";
 
@@ -71,14 +72,23 @@ namespace chordzimmer::params
     // Test shifter, every Smart Scale and pattern parameter, Test smart, Sync group and
     // Look-ahead; Phase 2 its Custom 1-7, Strum time, Seq sustain and the four step patterns
     // (ChordChimp's PLAN.md §3.5). A saved state's or preset's values for them are ignored.
-    constexpr int numParameters = 23;
+    // Timeline playback (appended; PLAN.md §3.3, §3.8, Phase 3). Play (above) now plays the
+    // progression; Sync mode chooses its clock (Sync: the host's song position from Start bar;
+    // Preview: its own, at the host's tempo, with the host stopped too); Loop repeats the loop
+    // region (the selection, else everything). Not in presets: they're how it's played, like
+    // Play.
+    inline constexpr const char* syncMode      = "syncMode";
+    inline constexpr const char* loop          = "loop";
+    inline constexpr const char* startBar      = "startBar";
+
+    constexpr int numParameters = 26;
 
     // A Chordism preset's tree, made ChordZimmer's: the Progression value becomes a choice
     // (Chordism's Custom: Diatonic). The other kept values mean the same.
     void fromChordism (juce::ValueTree& tree);
 
-    // Parameters a preset doesn't touch: Enable, Key octave, Analyse, Detect, Play and the test
-    // rig (Test pattern, Test workspace) (PresetManager).
+    // Parameters a preset doesn't touch: Enable, Key octave, Analyse, Detect, Play, Sync mode,
+    // Loop, Start bar and the test rig (Test pattern, Test workspace) (PresetManager).
     bool isPresetParameter (const juce::String& paramId);
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -112,6 +122,9 @@ namespace chordzimmer::params
         std::atomic<float>* patternParam;
         std::atomic<float>* testWorkspaceParam;
         std::atomic<float>* detectParam;
+        std::atomic<float>* syncModeParam;
+        std::atomic<float>* loopParam;
+        std::atomic<float>* startBarParam;
 
         std::atomic<float>* fxStack;
         std::atomic<float>* fxStrum;

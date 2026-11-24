@@ -13,9 +13,12 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
 
-**Status:** Phase 0 of 9 is done: the fork, the new identity and the **Night Studio** look
-(PLAN.md §5.1). The editor is still ChordMonkey's layout (chord pads, a workspace of patterns, the
-performance cards), restyled; the palette, key navigator and timeline replace it in Phases 1–4.
+**Status:** Phases 0–3 of 9 are done: the fork, the new identity and the **Night Studio** look
+(PLAN.md §5.1); the palette theory; the progression model; and timeline playback (Play follows
+Live from a start bar, or previews on its own clock). The editor is still ChordMonkey's layout
+(chord pads, a workspace of patterns, the performance cards), restyled, and nothing in it edits
+the progression yet; its Play no longer plays the workspace pattern. The palette, key navigator
+and timeline replace it in Phase 4.
 
 ## Build, test, install
 

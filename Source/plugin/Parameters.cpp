@@ -64,7 +64,7 @@ namespace chordzimmer::params
 
     bool isPresetParameter (const juce::String& paramId)
     {
-        for (const char* excluded : { enable, testPattern, keyOctave, analyse, detect, play, testWorkspace })
+        for (const char* excluded : { enable, testPattern, keyOctave, analyse, detect, play, testWorkspace, syncMode, loop, startBar })
             if (paramId == excluded)
                 return false;
         return true;
@@ -137,6 +137,12 @@ namespace chordzimmer::params
                                                             names (numBassModes, [] (int i) { return bassModeName ((BassMode) i); }), 0));
         // Phase 8: Detect. Appended, never reordered.
         layout.add (std::make_unique<AudioParameterChoice> (id (detect), "Detect", StringArray { "Off", "Capture", "Use result" }, 0));
+
+        // ChordZimmer Phase 3: timeline playback (ProgressionPlayer.h). Appended, never reordered.
+        layout.add (std::make_unique<AudioParameterChoice> (id (syncMode), "Sync mode",
+                                                            names (numSyncModes, [] (int i) { return syncModeName ((SyncMode) i); }), 0));
+        layout.add (std::make_unique<AudioParameterBool> (id (loop), "Loop", true));
+        layout.add (std::make_unique<AudioParameterInt> (id (startBar), "Start bar", 1, maxStartBar, 1));
         return layout;
     }
 
@@ -154,6 +160,9 @@ namespace chordzimmer::params
           patternParam (state.getRawParameterValue (params::pattern)),
           testWorkspaceParam (state.getRawParameterValue (params::testWorkspace)),
           detectParam (state.getRawParameterValue (params::detect)),
+          syncModeParam (state.getRawParameterValue (params::syncMode)),
+          loopParam (state.getRawParameterValue (params::loop)),
+          startBarParam (state.getRawParameterValue (params::startBar)),
           fxStack (state.getRawParameterValue (params::stack)),
           fxStrum (state.getRawParameterValue (params::strum)),
           fxStrumRate (state.getRawParameterValue (params::strumRate)),
@@ -166,7 +175,7 @@ namespace chordzimmer::params
           fxBass (state.getRawParameterValue (params::bass))
     {
         jassert (enable && keyParam && scale && group && chordOctave && testPattern && progression && keyOctaveParam && analyseParam
-                 && playParam && patternParam && testWorkspaceParam && detectParam);
+                 && playParam && patternParam && testWorkspaceParam && detectParam && syncModeParam && loopParam && startBarParam);
         jassert (fxStack && fxStrum && fxStrumRate && fxVelocity && fxVelocityPeak && fxVelocityRange && fxHold && fxVoiceLeading
                  && fxVoicing && fxBass);
     }
@@ -219,6 +228,9 @@ namespace chordzimmer::params
         s.analysing = analyseMode() != AnalyseMode::Off;
         s.capturing = detectMode() != DetectMode::Off;
         s.play = on (playParam);
+        s.sync = (SyncMode) choice (syncModeParam, numSyncModes);
+        s.loop = on (loopParam);
+        s.startBar = juce::jlimit (1, maxStartBar, whole (startBarParam));
         s.pattern = choice (patternParam, numPatterns);
         s.fx = chordFx();
         return s;

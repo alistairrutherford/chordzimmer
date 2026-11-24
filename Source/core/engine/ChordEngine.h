@@ -16,20 +16,29 @@
 //   Detect        → Capture: as Analyse, and the ChordListener groups the input into chords on
 //                   the beat grid (ChordListener.h; ChordMonkey's PLAN.md §3.6) for the plug-in
 //                   to write into a pattern (core/model/Detect.h)
-//   Play          → the workspace's current pattern plays in time (PatternPlayer.h), through
-//                   the same effects, as performance 128 (the timeline replaces it in Phase 3)
+//   Play          → the progression's timeline plays (ProgressionPlayer.h: Sync with the host
+//                   from the Start bar, or Preview on its own clock; Loop repeats the loop
+//                   region), through the same effects, as performance 128 (PLAN.md §3.3)
+//   Previews      → a chord auditioned from the editor (a palette cell or a timeline chord,
+//                   PLAN.md §3.1) plays through the same effects as performance 129, until it is
+//                   released or for a number of beats
 //
-// The workspace reaches the engine by setWorkspace (a copy, on the audio thread). The playing
-// pattern's slot notes follow it and Chord Octave; a sounding slot whose notes change is
-// retuned, like a held key's chord.
+// The timeline reaches the engine by setTimeline (a copy, on the audio thread). The sounding
+// chord follows it and Chord Octave: if an edit leaves the chord under the playhead in place but
+// changes its notes it is retuned, like a held key's chord; if it moves the chord lines, the
+// player restrikes. The workspace (setWorkspace) is only used for the editor's slot preview
+// until the timeline UI (Phase 4).
+//
+// The timeline and the preview play at Velocity peak (the fixed velocity, PLAN.md §3.6) unless a
+// Velocity curve is chosen.
 //
 // Whenever the chords change while chord keys are held (a parameter), each held key whose chord
 // changed is released and replayed.
 //
 // A block is processed in the Clock's segments (split at loop wraps). Within a segment, input
 // and queued events run in sample order; at one sample, queued note-offs come first, then
-// input (the host's, then the test pattern's, then the pattern's triggers), then queued
-// note-ons.
+// input (the host's, then the test pattern's, then the timeline's triggers), then queued
+// note-ons. Previews start at the first sample of the block they arrive in.
 #pragma once
 
 #include "../theory/Progressions.h"
@@ -39,7 +48,7 @@
 #include "KeyListener.h"
 #include "KeyMap.h"
 #include "MidiEvents.h"
-#include "PatternPlayer.h"
+#include "ProgressionPlayer.h"
 #include "TestPattern.h"
 #include "Transport.h"
 #include "VoiceTracker.h"
@@ -62,8 +71,11 @@ namespace chordzimmer
         bool testPattern = false;
         bool analysing = false;           // Analyse is Listen or Use guess (key detection)
         bool capturing = false;           // Detect is Capture or Use result (Phase 8)
-        bool play = false;                // Play: the current pattern plays (Phase 2)
-        int pattern = 0;                  // Pattern: A-D
+        bool play = false;                // Play: the timeline plays (Phase 3)
+        SyncMode sync = SyncMode::Sync;   // Sync mode (Phase 3)
+        bool loop = true;                 // Loop: the loop region repeats (Phase 3)
+        int startBar = 1;                 // Start bar: Sync's bar 1 of the timeline (Phase 3)
+        int pattern = 0;                  // Pattern: A-D (the editor's slot preview)
         int outputChannel = 0;            // 0..15
         ChordFxSettings fx;
 
@@ -71,10 +83,41 @@ namespace chordzimmer
         bool listening() const noexcept { return analysing || capturing; }
     };
 
+    // A chord auditioned from the editor (PLAN.md §3.1): its notes at Chord Octave 0
+    // (progressionChordNotes), held until a request with `on` false, or for `beats` if > 0.
+    struct PreviewRequest
+    {
+        ChordNotes notes;
+        int8_t root = 0;
+        bool on = false;
+        float beats = 0.0f;
+    };
+
     class ChordEngine
     {
     public:
         ChordEngine() { refreshChords (0, nullptr); }
+
+        // The timeline that Play plays (audio thread, before process()).
+        void setTimeline (const Timeline& t) noexcept
+        {
+            timeline = t;
+            timelineChanged = true;
+        }
+
+        // A preview to start or end at the next block's first sample (audio thread, before
+        // process()). False if too many are waiting.
+        bool queuePreview (const PreviewRequest& r) noexcept
+        {
+            if (numPreviews >= (int) previews.size())
+                return false;
+            previews[(size_t) numPreviews++] = r;
+            return true;
+        }
+
+        // Preview's ⏮: the timeline's own clock goes back to the loop region's start (or the
+        // top). Any thread.
+        void requestRewind() noexcept { rewindRequested.store (true); }
 
         // The workspace the patterns come from (audio thread, before process()).
         void setWorkspace (const Workspace& w) noexcept
@@ -118,6 +161,20 @@ namespace chordzimmer
                 refreshPatternChords (chordsPattern, &changed);
                 performer.retune (changed, 0, out);
             }
+            if (timelineChanged)
+            {
+                timelineChanged = false;
+                const int sounding = player.currentChord();
+                if (sounding >= 0 && player.expectedChord (timeline) == sounding)
+                {
+                    SlotFlags changed {};
+                    setTimelineSlot (sounding, &changed);
+                    performer.retune (changed, 0, out);
+                }
+            }
+            if (rewindRequested.exchange (false))
+                player.rewind();
+            startPreviews (s, out);
 
             int i = 0;
             for (int seg = 0; seg < clock.numSegments(); ++seg)
@@ -134,7 +191,13 @@ namespace chordzimmer
                 pattern.generate (s.enabled && s.testPattern && ! s.listening(), segmentTransport, g.end - g.start, injected, g.start);
                 triggers.clear();
                 playOn = s.enabled && s.play && ! s.listening();
-                player.generate (playOn, workspace, currentPattern, clock, seg, g.end - g.start, triggers, g.start);
+                player.generate (PlayerSettings { playOn, s.sync, s.loop, s.startBar }, timeline, clock, seg, g.end - g.start, triggers, g.start);
+                if (previewEnd >= 0 && previewEnd < clock.blockStart() + g.end)
+                {
+                    const auto at = previewEnd - clock.blockStart();
+                    triggers.insertSorted ({ (int) (at < g.start ? g.start : at), (int16_t) -1, TimelineTrigger::PreviewEnd });
+                    previewEnd = -1;
+                }
 
                 int j = 0, k = 0, cursor = g.start, runs = 0;
                 while (true)
@@ -193,6 +256,7 @@ namespace chordzimmer
             voices.releaseAll (sample, out);
             held = {};
             player.reset();
+            previewEnd = -1;
             listener.allUp (timeAt (sample));
             chordListener.allUp (beatAt (sample));
             refreshChords (sample, nullptr);
@@ -208,12 +272,15 @@ namespace chordzimmer
         int getLastChordSlot() const noexcept { return lastChordSlot; }
         int getPatternKey() const noexcept { return pattern.getHeldKey(); }
         const ChordPerformer& getPerformer() const noexcept { return performer; }
-        const PatternPlayer& getPlayer() const noexcept { return player; }
+        const ProgressionPlayer& getPlayer() const noexcept { return player; }
         const Workspace& getWorkspace() const noexcept { return workspace; }
+        const Timeline& getTimeline() const noexcept { return timeline; }
 
-        // The pattern slot sounding (0..7) and its pattern, or -1 (for the editor).
-        int getPlayingSlot() const noexcept { return performer.isAlive (ChordPerformer::patternKey) ? player.currentSlot() : -1; }
-        int getPlayingPattern() const noexcept { return player.playingPattern(); }
+        // The timeline chord sounding (an index into the timeline), or -1, and the playhead
+        // (timeline beats, -1 when not playing), for the editor.
+        int getPlayingChord() const noexcept { return performer.isAlive (ChordPerformer::timelineKey) ? player.currentChord() : -1; }
+        double getPlayhead() const noexcept { return player.playhead(); }
+        bool isPreviewing() const noexcept { return performer.isAlive (ChordPerformer::previewKey); }
 
         const Clock& getClock() const noexcept { return clock; }
 
@@ -286,33 +353,79 @@ namespace chordzimmer
             const Pattern& p = workspace.patterns[(size_t) index];
             for (int i = 0; i < numPatternSlots; ++i)
             {
-                const ChordNotes next = slotNotes (p.slots[(size_t) i], current.chordOctave);
-                const auto root = (int8_t) p.slots[(size_t) i].chord.root;
-                if (changed != nullptr)
-                    (*changed)[(size_t) (numChordSlots + i)] = ! sameNotes (next, patternChords[(size_t) i]) || root != patternRoots[(size_t) i];
-                patternChords[(size_t) i] = next;
-                patternRoots[(size_t) i] = root;
+                setExtraSlot (numChordSlots + i, slotNotes (p.slots[(size_t) i], current.chordOctave), p.slots[(size_t) i].chord.root, changed);
             }
         }
 
-        // A PatternPlayer trigger: the pattern's performance plays slot `t.slot`, or ends.
-        void handleTrigger (const PatternTrigger& t, BlockEvents& out) noexcept
+        // `notes` moved by `octaves`; notes outside 0..127 are dropped.
+        static ChordNotes octaveMoved (const ChordNotes& notes, int octaves) noexcept
         {
-            if (t.slot < 0)
+            ChordNotes out;
+            for (const uint8_t n : notes)
+                if (n + 12 * octaves >= 0 && n + 12 * octaves <= 127)
+                    out.notes[(size_t) out.size++] = (uint8_t) (n + 12 * octaves);
+            return out;
+        }
+
+        // An extra slot's notes and root; marks it in `changed` if they changed.
+        void setExtraSlot (int slot, const ChordNotes& notes, int root, SlotFlags* changed) noexcept
+        {
+            const auto i = (size_t) (slot - numChordSlots);
+            if (changed != nullptr)
+                (*changed)[(size_t) slot] = ! sameNotes (notes, extraChords[i]) || root != extraRoots[i];
+            extraChords[i] = notes;
+            extraRoots[i] = (int8_t) root;
+        }
+
+        void setTimelineSlot (int chord, SlotFlags* changed) noexcept
+        {
+            if (chord < 0 || chord >= timeline.count)
+                return;
+            const auto& c = timeline.chords[(size_t) chord];
+            setExtraSlot (timelineSlot, octaveMoved (c.notes, current.chordOctave), c.root, changed);
+        }
+
+        int fixedVelocity() const noexcept { return current.fx.velocity.peak; }
+
+        // A ProgressionPlayer trigger: the timeline's performance plays chord `t.chord`, or ends;
+        // or a timed preview ends.
+        void handleTrigger (const TimelineTrigger& t, BlockEvents& out) noexcept
+        {
+            if (t.kind == TimelineTrigger::PreviewEnd)
             {
-                performer.end (ChordPerformer::patternKey, t.sample, out);
+                performer.end (ChordPerformer::previewKey, t.sample, out);
                 return;
             }
-            if (t.pattern != chordsPattern)
+            if (t.chord < 0 || t.chord >= timeline.count)
             {
-                // The pattern's own chord ends here anyway; a preview held from the old pattern
-                // takes the new one's notes.
-                performer.end (ChordPerformer::patternKey, t.sample, out);
-                SlotFlags changed {};
-                refreshPatternChords (t.pattern, &changed);
-                performer.retune (changed, t.sample, out);
+                performer.end (ChordPerformer::timelineKey, t.sample, out);
+                return;
             }
-            performer.press (ChordPerformer::patternKey, numChordSlots + t.slot, patternVelocity, t.sample, out);
+            setTimelineSlot (t.chord, nullptr);
+            performer.press (ChordPerformer::timelineKey, timelineSlot, fixedVelocity(), t.sample, out);
+        }
+
+        // The previews queued for this block, in order, at its first sample.
+        void startPreviews (const EngineSettings& s, BlockEvents& out) noexcept
+        {
+            const int n = numPreviews;
+            numPreviews = 0;
+            for (int i = 0; i < n; ++i)
+            {
+                const auto& r = previews[(size_t) i];
+                previewEnd = -1;
+                if (! r.on || ! s.enabled || s.listening() || r.notes.size == 0)
+                {
+                    performer.end (ChordPerformer::previewKey, 0, out);
+                    continue;
+                }
+                previewNotes = r.notes;
+                previewRoot = r.root;
+                setExtraSlot (previewSlot, octaveMoved (previewNotes, current.chordOctave), previewRoot, nullptr);
+                performer.press (ChordPerformer::previewKey, previewSlot, fixedVelocity(), 0, out);
+                if (r.beats > 0.0f && std::isfinite (r.beats))
+                    previewEnd = clock.blockStart() + (int64_t) std::llround (r.beats * clock.samplesPerQuarter());
+            }
         }
 
         void applySettings (const EngineSettings& s, BlockEvents& out) noexcept
@@ -341,7 +454,11 @@ namespace chordzimmer
             SlotFlags changed {};
             refreshChords (0, nullptr, &changed);
             if (s.chordOctave != old.chordOctave)
+            {
                 refreshPatternChords (chordsPattern, &changed);
+                setTimelineSlot (player.currentChord(), &changed);
+                setExtraSlot (previewSlot, octaveMoved (previewNotes, s.chordOctave), previewRoot, &changed);
+            }
             if (s.followKeyOctave != old.followKeyOctave)
                 changed.fill (true);
             performer.applySettings (s.fx, s.outputChannel, changed, 0, out);
@@ -456,7 +573,6 @@ namespace chordzimmer
         }
 
         static constexpr int maxQueueRunsPerSegment = 1 << 16;
-        static constexpr int patternVelocity = 100;
 
         EngineSettings current;
         VoiceTracker voices;
@@ -466,11 +582,19 @@ namespace chordzimmer
         ChordContext context;
         std::array<HeldKey, 128> held {};
         EventBuffer<256> injected;
-        PatternPlayer player;
-        TriggerBuffer<256> triggers;
+        ProgressionPlayer player;
+        TimelineTriggers<256> triggers;
+        Timeline timeline;
+        bool timelineChanged = false;
+        std::array<PreviewRequest, 16> previews {};
+        int numPreviews = 0;
+        ChordNotes previewNotes {};       // the preview's chord at Chord Octave 0
+        int8_t previewRoot = 0;
+        int64_t previewEnd = -1;          // a timed preview's end (absolute sample), or -1
+        std::atomic<bool> rewindRequested { false };
         Workspace workspace;
-        PatternChords patternChords {};
-        PatternRoots patternRoots {};
+        ExtraChords extraChords {};
+        ExtraRoots extraRoots {};
         int chordsPattern = 0;            // the pattern patternChords holds
         bool workspaceChanged = false;
         int currentPattern = 0;           // the Pattern parameter
@@ -482,6 +606,6 @@ namespace chordzimmer
         ChordListener chordListener;
         double seconds = 0.0, secondsPerSample = 1.0 / 44100.0, listenBeats = 0.0;
         std::atomic<bool> resetRequested { false }, heardResetRequested { false };
-        ChordPerformer performer { voices, clock, chords, patternChords, patternRoots, context };
+        ChordPerformer performer { voices, clock, chords, extraChords, extraRoots, context };
     };
 }

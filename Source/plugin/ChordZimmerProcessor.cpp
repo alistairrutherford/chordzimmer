@@ -181,15 +181,22 @@ namespace chordzimmer
 
         if (workspaceForAudio.hasNew())
             engine.setWorkspace (workspaceForAudio.read());
+        if (timelineForAudio.hasNew())
+            engine.setTimeline (timelineForAudio.read());
+        {
+            const auto scope = previewFifo.read (previewFifo.getNumReady());
+            for (int i = 0; i < scope.blockSize1; ++i) engine.queuePreview (previewRequests[(size_t) (scope.startIndex1 + i)]);
+            for (int i = 0; i < scope.blockSize2; ++i) engine.queuePreview (previewRequests[(size_t) (scope.startIndex2 + i)]);
+        }
 
         output.clear();
         engine.process (settings, transport, input.begin(), input.size(), numSamples, output);
-        playingPattern.store (engine.getPlayingPattern(), std::memory_order_relaxed);
         if (transport.bpm > 0.0 && std::isfinite (transport.bpm))
             hostBpm.store (transport.bpm, std::memory_order_relaxed);
         hostNumerator.store (transport.numerator, std::memory_order_relaxed);
         hostDenominator.store (transport.denominator, std::memory_order_relaxed);
-        playingSlot.store (engine.getPlayingSlot(), std::memory_order_relaxed);
+        playingChord.store (engine.getPlayingChord(), std::memory_order_relaxed);
+        playhead.store (engine.getPlayhead(), std::memory_order_relaxed);
         recorder.record (transport, numSamples, output.begin(), output.size());
 
         for (const auto& e : output)
@@ -269,7 +276,7 @@ namespace chordzimmer
         if (snapshot.testWorkspace())
             readTestWorkspace();
         else
-            testWorkspaceRead = {};
+            testWorkspaceRead = testProgressionRead = {};
 
         // The test rig's takes and guesses, for checks in Live.
         if (snapshot.engineSettings().testPattern)
@@ -396,6 +403,11 @@ namespace chordzimmer
         return testTakeFile().getSiblingFile ("Workspace.txt");
     }
 
+    juce::File ChordZimmerProcessor::testProgressionFile()
+    {
+        return testTakeFile().getSiblingFile ("Progression.txt");
+    }
+
     juce::File ChordZimmerProcessor::testKeysFile()
     {
         return testTakeFile().getSiblingFile ("Keys.txt");
@@ -449,6 +461,33 @@ namespace chordzimmer
                     k.keys[(size_t) k.count++] = { from, from + length, (uint8_t) note };
             }
             testKeysForAudio.publish (k);
+        }
+
+        const auto progressionFile = testProgressionFile();
+        if (const auto changed = progressionFile.getLastModificationTime();
+            progressionFile.existsAsFile() && changed != testProgressionRead)
+        {
+            testProgressionRead = changed;
+            ChordProgression p;
+            juce::StringArray lines;
+            progressionFile.readLines (lines);
+            for (const auto& line : lines)
+            {
+                if (line.trimStart().startsWithChar ('#') || line.trim().isEmpty())
+                    continue;
+                const bool named = line.containsChar ('|');
+                const auto name = named ? line.upToFirstOccurrenceOf ("|", false, false).trim() : juce::String();
+                const auto numerals = named ? line.fromFirstOccurrenceOf ("|", false, false) : line;
+                std::string error;
+                Pattern pattern;
+                if (parseProgression (numerals.toStdString(), snapshot.key(), pattern, error))
+                {
+                    auto section = progressionFromPattern (pattern, name.isEmpty() ? p.defaultSectionName() : name.toStdString());
+                    if (! section.empty() && p.numSections() < maxProgressionSections)
+                        p.sections.push_back (std::move (section.sections[0]));
+                }
+            }
+            setProgression (p);
         }
 
         if (! file.existsAsFile() || modified == testWorkspaceRead)
@@ -508,6 +547,28 @@ namespace chordzimmer
     {
         if (! restoringState)
             updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    }
+
+    void ChordZimmerProcessor::pushPreview (const PreviewRequest& r) noexcept
+    {
+        const auto scope = previewFifo.write (1);
+        if (scope.blockSize1 > 0) previewRequests[(size_t) scope.startIndex1] = r;
+        else if (scope.blockSize2 > 0) previewRequests[(size_t) scope.startIndex2] = r;
+    }
+
+    void ChordZimmerProcessor::previewChord (const ProgressionChord& chord, double beats) noexcept
+    {
+        PreviewRequest r;
+        r.notes = progressionChordNotes (chord);
+        r.root = (int8_t) chord.root();
+        r.on = r.notes.size > 0;
+        r.beats = beats > 0.0 && std::isfinite (beats) ? (float) beats : 0.0f;
+        pushPreview (r);
+    }
+
+    void ChordZimmerProcessor::endPreview() noexcept
+    {
+        pushPreview (PreviewRequest {});
     }
 
     void ChordZimmerProcessor::pushSlotPreview (int slot, bool on) noexcept
@@ -737,8 +798,30 @@ namespace chordzimmer
             if (progression == p)
                 return;
             progression = p;
+            loopSelection = progression.normalised (loopSelection);
+            publishTimeline();
         }
         notifyStateChanged();
+    }
+
+    Selection ChordZimmerProcessor::getLoopSelection() const
+    {
+        const juce::ScopedLock sl (progressionLock);
+        return loopSelection;
+    }
+
+    void ChordZimmerProcessor::setLoopSelection (const Selection& sel)
+    {
+        const juce::ScopedLock sl (progressionLock);
+        loopSelection = progression.normalised (sel);
+        publishTimeline();
+    }
+
+    void ChordZimmerProcessor::publishTimeline()
+    {
+        // The Timeline is ~12 KB: built on the heap, not the message thread's stack.
+        const auto t = std::make_unique<Timeline> (makeTimeline (progression, loopSelection));
+        timelineForAudio.publish (*t);
     }
 
     juce::ValueTree ChordZimmerProcessor::progressionToTree (const ChordProgression& p)
@@ -804,6 +887,8 @@ namespace chordzimmer
         {
             const juce::ScopedLock sl (progressionLock);
             progression = progressionFromTree (pg);
+            loopSelection = {};
+            publishTimeline();
         }
         tree.removeChild (pg, nullptr);
         dropNonFiniteValues (tree);

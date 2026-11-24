@@ -34,6 +34,7 @@
         <FILE id="csF005" name="Transport.h" compile="0" resource="0" file="Source/core/engine/Transport.h"/>
         <FILE id="csF007" name="VoiceTracker.h" compile="0" resource="0" file="Source/core/engine/VoiceTracker.h"/>
         <FILE id="csF008" name="TestPattern.h" compile="0" resource="0" file="Source/core/engine/TestPattern.h"/>
+        <FILE id="czF301" name="ProgressionPlayer.h" compile="0" resource="0" file="Source/core/engine/ProgressionPlayer.h"/>
         <FILE id="csF024" name="SnapshotExchange.h" compile="0" resource="0" file="Source/core/engine/SnapshotExchange.h"/>
         <FILE id="csF027" name="Clock.h" compile="0" resource="0" file="Source/core/engine/Clock.h"/>
         <FILE id="csF028" name="EventQueue.h" compile="0" resource="0" file="Source/core/engine/EventQueue.h"/>

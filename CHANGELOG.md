@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased: Phase 3, playback
+
+Engine and processor only (PLAN.md §6, Phase 3); the timeline UI is Phase 4.
+
+- **Timeline playback** (PLAN.md §3.3, `core/engine/ProgressionPlayer.h`, replacing ChordMonkey's
+  `PatternPlayer`): **Play** now plays the progression, chord by chord, through the effect chain
+  (Voicing, Bass, Voice leading, Chord Octave, Strum, Velocity, PLAN.md §3.6).
+  - **Sync mode → Sync** follows Live: locked to the song from **Start bar**; with **Loop** the
+    loop region repeats (before the start bar too), without it the progression plays once.
+    Host loops, locates and tempo changes land where the timeline would be.
+  - **Sync mode → Preview** runs on its own clock at Live's tempo, with Live stopped too: loops
+    the region, or plays once and stops; Play off pauses, ⏮ (`rewind`) goes back.
+  - The **loop region** is the selection (chords or sections), else everything.
+  - Every chord change is restruck on its beat; an edit to the sounding chord retunes it; an
+    edit that moves the chord lines restrikes; all notes end on stop, Play off, Enable off and
+    when the progression empties.
+- **Previews** (PLAN.md §3.1): the processor's `previewChord` / `endPreview` audition a chord
+  through the same effects, held or for a number of beats, over the timeline if it plays.
+- The timeline and previews play at **Velocity peak** when the Velocity curve is Off.
+- New parameters (appended): **Sync mode**, **Loop**, **Start bar** (26 in all); not in presets.
+- **Changed:** the workspace's pattern no longer plays (Play is the timeline's); the pattern
+  drag-out now renders the pattern as a one-section progression through the same player.
+- Test rig: with Test workspace on, `Progression.txt` (one section per line, `Name | numerals`)
+  loads the progression, for checks in Live.
+- Tests: `test_player` rewritten for the timeline; `test_render` renders through it.
+
 ## Unreleased: Phase 2, progression model
 
 Core and state only (PLAN.md §6, Phase 2); the timeline UI is Phase 4 and playback Phase 3.

@@ -1,9 +1,12 @@
-// A pattern rendered as MIDI (ChordMonkey's PLAN.md §3.6, Phase 6): the workspace's drag-out. One loop of the
-// pattern played offline through a ChordEngine of its own (the same code that plays it in the
-// host), with Play on and a fake transport from song position 0, then stopped at the loop's
-// end, so the clip is exactly what the host would hear: voicing, bass, strum and velocity
-// included. With `chordsOnly`, Strum is left out: each slot's chord starts together and is held
-// for its length.
+// A progression rendered as MIDI (ChordMonkey's PLAN.md §3.6, Phase 6; PLAN.md §3.7): the drag-out.
+// The progression played once offline through a ChordEngine of its own (the same code that
+// plays it in the host), with Play on in Sync from bar 1 and a fake transport from song position
+// 0, then stopped at its end, so the clip is exactly what the host would hear: voicing, bass,
+// strum and velocity included. With `chordsOnly`, Strum is left out: each chord starts together
+// and is held for its length.
+//
+// renderPattern (the workspace's drag-out, until Phase 4 replaces the workspace) renders one
+// pattern as a one-section progression (progressionFromPattern).
 //
 // Plain C++, no JUCE. Allocates (the engine is large): for the message thread.
 #pragma once
@@ -15,8 +18,8 @@
 
 namespace chordzimmer
 {
-    inline MidiSong renderPattern (const Workspace& ws, int index, EngineSettings s, double bpm, int numerator = 4,
-                                   int denominator = 4, bool chordsOnly = false, double sampleRate = 48000.0, int ppq = 960)
+    inline MidiSong renderProgression (const ChordProgression& p, EngineSettings s, double bpm, int numerator = 4,
+                                       int denominator = 4, bool chordsOnly = false, double sampleRate = 48000.0, int ppq = 960)
     {
         MidiSong song;
         song.ppq = ppq;
@@ -24,22 +27,26 @@ namespace chordzimmer
         song.numerator = numerator;
         song.denominator = denominator;
         song.name = "ChordZimmer";
-        if (index < 0 || index >= numPatterns || ws.patterns[(size_t) index].empty())
+        if (p.empty())
             return song;
 
         s.enabled = true;
         s.analysing = false;
+        s.capturing = false;
         s.testPattern = false;
         s.play = true;
-        s.pattern = index;
+        s.sync = SyncMode::Sync;
+        s.loop = true;
+        s.startBar = 1;
         if (chordsOnly)
         {
             s.fx.strum = StrumMode::Off;
         }
 
         auto engine = std::make_unique<ChordEngine>();
-        engine->setWorkspace (ws);
-        const double beats = ws.patterns[(size_t) index].totalHalfBeats() * 0.5;
+        const auto timeline = std::make_unique<Timeline> (makeTimeline (p));
+        engine->setTimeline (*timeline);
+        const double beats = p.totalBeats();
         const double spb = sampleRate * 60.0 / song.bpm;
         const auto total = (int64_t) std::llround (beats * spb);
         constexpr int block = 512;
@@ -101,5 +108,14 @@ namespace chordzimmer
         });
         song.notes = std::move (kept);
         return song;
+    }
+
+    inline MidiSong renderPattern (const Workspace& ws, int index, EngineSettings s, double bpm, int numerator = 4,
+                                   int denominator = 4, bool chordsOnly = false, double sampleRate = 48000.0, int ppq = 960)
+    {
+        if (index < 0 || index >= numPatterns)
+            return renderProgression ({}, s, bpm, numerator, denominator, chordsOnly, sampleRate, ppq);
+        return renderProgression (progressionFromPattern (ws.patterns[(size_t) index]), s, bpm, numerator, denominator, chordsOnly,
+                                  sampleRate, ppq);
     }
 }

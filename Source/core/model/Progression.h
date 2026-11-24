@@ -754,6 +754,23 @@ namespace chordzimmer
         }
     };
 
+    // A workspace pattern as a one-section progression with the same chords and lengths (the
+    // workspace's playback and drag-out until the timeline UI replaces it, Phase 4).
+    inline ChordProgression progressionFromPattern (const Pattern& pattern, const std::string& name = "Pattern")
+    {
+        ChordProgression p;
+        ProgressionSection s;
+        s.name = name;
+        for (int i = 0, n = pattern.size(); i < n; ++i)
+        {
+            const auto& slot = pattern.slots[(size_t) i];
+            s.chords.push_back (makeProgressionChord (slot.chord, slot.halfBeats * ticksPerBeat / 2, slot.inversion, slot.octave));
+        }
+        if (! s.chords.empty())
+            p.sections.push_back (std::move (s));
+        return p;
+    }
+
     //==========================================================================
     // The saved text (the plug-in state and presets). Message thread.
 

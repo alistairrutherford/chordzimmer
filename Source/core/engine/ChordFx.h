@@ -15,10 +15,11 @@
 // the chord played last (pressed or retuned), before Stack. The last chord is forgotten when
 // the transport starts and when everything ends, so a take from the top always voices the same.
 //
-// Pattern playback (ChordMonkey's PLAN.md §3.2; reworked into the timeline in Phase 3): chord
-// slots 12-19 are the playing pattern's eight slots, whose notes the engine computes
-// (PatternChords); performance 128 (patternKey) plays them, pressed and ended by the
-// PatternPlayer's triggers. The key octave never moves it.
+// Extra chord slots (ExtraChords), whose notes the engine computes: 12-19 are the current
+// workspace pattern's eight slots (the editor's slot preview, until the timeline UI of Phase 4),
+// 20 the timeline chord playing and 21 the preview chord (PLAN.md §3.3, §3.1, Phase 3).
+// Performance 128 (timelineKey) plays the timeline, pressed and ended by the ProgressionPlayer's
+// triggers; performance 129 (previewKey) plays previews. The key octave never moves either.
 //
 // Each chord key that goes down starts a *performance* (one per key, so 128, and the
 // pattern's). A performance plays its chord as one strike for as long as the chord is held: all
@@ -59,14 +60,18 @@
 
 namespace chordzimmer
 {
-    // The chord slots a performance can play: the palette's twelve, then the pattern's eight.
-    constexpr int numPerformSlots = numChordSlots + numPatternSlots;
+    // The chord slots a performance can play: the palette's twelve, the workspace pattern's
+    // eight, the timeline's and the preview's.
+    constexpr int numExtraSlots = numPatternSlots + 2;
+    constexpr int timelineSlot = numChordSlots + numPatternSlots;   // 20
+    constexpr int previewSlot = timelineSlot + 1;                   // 21
+    constexpr int numPerformSlots = numChordSlots + numExtraSlots;
     using SlotFlags = std::array<bool, numPerformSlots>;
 
-    // The notes of the playing pattern's slots (inversion, octave and Chord Octave applied), and
-    // their roots (pitch classes, for Bass).
-    using PatternChords = std::array<ChordNotes, numPatternSlots>;
-    using PatternRoots = std::array<int8_t, numPatternSlots>;
+    // The notes of the extra slots (inversion, octave and Chord Octave applied), and their roots
+    // (pitch classes, for Bass).
+    using ExtraChords = std::array<ChordNotes, numExtraSlots>;
+    using ExtraRoots = std::array<int8_t, numExtraSlots>;
 
     struct ChordFxSettings
     {
@@ -83,8 +88,9 @@ namespace chordzimmer
     class ChordPerformer
     {
     public:
-        static constexpr int numPerformances = 129;
-        static constexpr int patternKey = 128;    // the pattern's performance (Phase 2)
+        static constexpr int numPerformances = 130;
+        static constexpr int timelineKey = 128;   // the timeline's performance (Phase 3)
+        static constexpr int previewKey = 129;    // previews (Phase 3)
         static constexpr int firstSource = 128;   // sources 0..127 are input keys
 
         static VoiceTracker::Source sourceOf (int key, int which) noexcept
@@ -97,9 +103,9 @@ namespace chordzimmer
         // Ties at one sample: note-offs, then input (key presses and releases), then note-ons.
         static constexpr uint8_t endOrder = 0, inputOrder = 1, startOrder = 2;
 
-        ChordPerformer (VoiceTracker& v, Clock& c, const ChordSet& chordSet, const PatternChords& patternChordSet,
-                        const PatternRoots& patternRootSet, const ChordContext& ctx) noexcept
-            : voices (v), clock (c), chords (chordSet), patternChords (patternChordSet), patternRoots (patternRootSet), context (ctx) {}
+        ChordPerformer (VoiceTracker& v, Clock& c, const ChordSet& chordSet, const ExtraChords& extraChordSet,
+                        const ExtraRoots& extraRootSet, const ChordContext& ctx) noexcept
+            : voices (v), clock (c), chords (chordSet), extraChords (extraChordSet), extraRoots (extraRootSet), context (ctx) {}
 
         VoiceTracker::Source source (int key, int which) const noexcept { return sourceOf (key, which); }
 
@@ -339,7 +345,7 @@ namespace chordzimmer
             if (slot < 0 || slot >= numPerformSlots)
                 return {};
             ChordNotes notes = slot < numChordSlots ? chordNotes (chords[(size_t) slot], context)
-                                                    : patternChords[(size_t) (slot - numChordSlots)];
+                                                    : extraChords[(size_t) (slot - numChordSlots)];
             int lowestWritten = 128;      // the chord's bass as written (its notes aren't in pitch order)
             for (const uint8_t n : notes)
                 lowestWritten = n < lowestWritten ? n : lowestWritten;
@@ -350,7 +356,7 @@ namespace chordzimmer
             if (base != nullptr)
                 *base = notes;
             const VoicedNotes stacked = stackNotes (notes, fx.stack);
-            const int shift = (followKeyOctave && key != patternKey ? 12 * (key / 12 - KeyMap::homeC / 12) : 0)
+            const int shift = (followKeyOctave && key < firstSource ? 12 * (key / 12 - KeyMap::homeC / 12) : 0)
                             + (validKey (key) ? 12 * perfs[(size_t) key].octave : 0);
             VoicedNotes moved;
             for (const uint8_t n : stacked)
@@ -363,7 +369,7 @@ namespace chordzimmer
         int rootOf (int slot) const noexcept
         {
             if (slot >= numChordSlots)
-                return patternRoots[(size_t) (slot - numChordSlots)];
+                return extraRoots[(size_t) (slot - numChordSlots)];
             const auto& c = chords[(size_t) slot];
             return (((context.key + scaleOffset (context.scale, c.degree) + c.steps[0].accidental) % 12) + 12) % 12;
         }
@@ -545,8 +551,8 @@ namespace chordzimmer
         VoiceTracker& voices;
         Clock& clock;
         const ChordSet& chords;
-        const PatternChords& patternChords;
-        const PatternRoots& patternRoots;
+        const ExtraChords& extraChords;
+        const ExtraRoots& extraRoots;
         const ChordContext& context;
 
         ChordFxSettings fx;
