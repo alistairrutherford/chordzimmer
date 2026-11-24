@@ -37,7 +37,9 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
   usual follow-ups.
 - **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with
   the section names as markers. And the other way: drop a `.mid` on the timeline for its chords
-  (its markers become sections), or on Match for its melody.
+  (its markers become sections), or on Match for its melody. (In Live this doesn't work
+  yet: Live keeps a clip's drag to itself, and hides the plug-in window while the Finder is in
+  front. It works in the Standalone.)
 - **Performance** (the footer): strum, velocity, voicing, bass, voice leading, octave, stack, and
   what keys played in do (chords of the home key, Heard, Detect).
 - **Presets:** the factory presets, your own, and **Templates** (Four Chords, Minor Axis,
