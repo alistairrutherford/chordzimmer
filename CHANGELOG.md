@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased: Phase 8, hardening and install
+
+PLAN.md §6, Phase 8.
+
+- **Templates** in the presets (a new category, after the existing presets, whose program
+  numbers stay): Four Chords, Minor Axis, Two-Five-One, Twelve-Bar Blues, Andalusian Cadence,
+  Canon Ground, Fifties and Dorian Vamp. Each loads a key, a scale and a progression of named
+  sections; the other presets leave the timeline alone.
+- **Benchmark** (`Tests/run_bench.sh`): 8 instances, idle, the timeline in Sync, everything on,
+  Preview, Listen and Detect at 32/128/512-sample blocks; the worst mean is about 0.2% of a core
+  per instance (the target is under 1%).
+- **Hardening checks** in the snapshot test (ChordMonkey's, for the timeline): no allocation in
+  `processBlock` with everything on while the timeline plays and is edited, previews start and
+  Listen toggles; damaged saved states (random bytes; NaN, infinite and junk values; a broken
+  progression, workspace and UI); zero-length, 8192-sample and mono blocks, bypass, the host's
+  all-notes-off during Preview, a reset and a sample-rate change, SysEx, an input flood; 64
+  instances.
+- **CI** also runs the snapshot test (without pixel comparison) and the benchmark;
+  `Tests/snapshot_build.sh` builds the snapshot app against a JUCE elsewhere.
+- **README** rewritten: what it does, building and testing, using it in Live.
+
 ## Unreleased: Phase 6, Chord Relations
 
 PLAN.md §6, Phase 6; §3.5.

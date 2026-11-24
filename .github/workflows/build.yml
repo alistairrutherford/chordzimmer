@@ -43,6 +43,16 @@ jobs:
       - name: Build, sign and install (Tools/install.sh), pluginval strictness 10
         run: repo/Tools/install.sh --juce "$GITHUB_WORKSPACE/JUCE" --validate
 
+      # The editor snapshot test (Phase 4 on) and the hardening checks (Phase 8), built against
+      # the checked-out JUCE (Tests/snapshot_build.sh). The reference images are tied to the
+      # fonts of the Mac they were made on, so pixels aren't compared here.
+      - name: Editor snapshot and hardening tests (no pixel comparison)
+        run: JUCE="$GITHUB_WORKSPACE/JUCE" repo/Tests/run_snapshot.sh --no-pixels
+
+      # PLAN.md §6, Phase 8: 8 instances under 1% CPU each (a shorter run than locally).
+      - name: CPU benchmark
+        run: JUCE="$GITHUB_WORKSPACE/JUCE" repo/Tests/run_bench.sh 5
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v7
@@ -52,4 +62,6 @@ jobs:
             repo/Tests/build/pluginval
             repo/dist/build/xcodebuild.log
             repo/dist/projucer-build.log
+            repo/Tests/build/snapshot-build.log
+            repo/Tests/build/snapshot
           if-no-files-found: ignore

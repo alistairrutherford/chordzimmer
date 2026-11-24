@@ -3,30 +3,51 @@
 A MIDI chord plug-in (VST3) for Ableton Live on macOS that brings Klimper 2's way of making chords
 to Live: a **chord palette** by scale degree and complexity, colour-coded by chord family and
 marked in or out of key; **borrowing** around the circle of fifths and from parallel modes; a
-section-based **progression timeline**; **matching chords to a melody**; and drag-out to MIDI
-clips. It makes no sound itself: it sends MIDI to an instrument on another track. It's a fork of
-[ChordMonkey](../chordmonkey). The plan and its status are in [PLAN.md](PLAN.md).
+section-based **progression timeline**; **matching chords to a melody**; **chord relations**; and
+drag-out to MIDI clips. It makes no sound itself: it sends MIDI to an instrument on another track.
+It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PLAN.md](PLAN.md).
 
 ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual text or name.
 
-**Version 0.0.1** (Phase 0, 2026-11-24). What changed: [CHANGELOG.md](CHANGELOG.md).
+**Version 0.0.1** (Phases 0–8 of PLAN.md done, 2026-11-24; not released yet). What changed:
+[CHANGELOG.md](CHANGELOG.md).
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
 
-**Status:** Phases 0–7 of 9 are done: the fork, the new identity and the **Night Studio** look
-(PLAN.md §5.1); the palette theory; the progression model; timeline playback (Play follows Live
-from a start bar, or previews on its own clock); the editor: the **palette** (click to hear,
-drag or double-click onto the timeline), the **key navigator** (◀ ▶ around the circle of fifths,
-the parallel modes, ⌂ Home), the **timeline** (sections of chords: drag to move, Alt-drag to
-copy, drag an edge to resize, snap, undo), the transport and a performance popover; **Match**
-(play a phrase in, or pick notes, and see the palette chords that fit them, or turn the notes
-into a chord); **Chord Relations** (each chord's function, shared notes and voice-leading
-distance from the one chosen, what usually comes next, and replacements); and **Drag MIDI**,
-the selection (or everything) as a clip with section markers. Hardening (Phase 8) is next.
+## What it does
+
+- **Palette:** the chords of the palette's key and mode, by degree (columns, headed by their
+  numerals in the home key) and complexity (rows: power and sus, triads, 6ths and 7ths, colour,
+  extended, altered). Teal: major family; violet: minor; slate: the rest. Filled: every note in
+  the home key; a ring: not. Click to hear, drag onto the timeline, double-click to add.
+- **Key navigator** (the footer): the home key (Key, Scale), ⌂ Home, ◀ ▶ a fifth down or up to
+  borrow, the parallel modes, and a circle-of-fifths dial.
+- **Timeline:** sections of chords. Drag a chord or a section's tab to move it (Alt: copy, also
+  between sections), drag an edge to resize (snap 1/16 … a bar), click and Shift-click to select
+  (the selection is the loop region), right-click for inversion, octave, bass, *Replace with ▸*,
+  rename, colour. Undo and redo for every edit (Cmd-Z, Shift-Cmd-Z).
+- **Transport:** Play, Loop, **Sync** (locked to Live's song position from a start bar) or
+  **Preview** (its own clock at Live's tempo, also with Live stopped), Start bar, Snap.
+- **Match** (the footer): turn **Listen** on and play a phrase in, from the keys or a clip on a
+  track routed in, or pick notes on the strip: the 8 palette chords that fit best are ranked, on
+  the palette too. *Chord from notes* turns any notes into a chord (Set replaces the selected one,
+  Add puts it in).
+- **Relations** (the palette's title row): for the chord last chosen, each palette chord's
+  function (V/vi, IV, rel, sub), notes in common and voice-leading distance, and **Next ▸**, five
+  usual follow-ups.
+- **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with
+  the section names as markers.
+- **Performance** (the footer): strum, velocity, voicing, bass, voice leading, octave, stack, and
+  what keys played in do (chords of the home key, Heard, Detect).
+- **Presets:** the factory presets, your own, and **Templates** (Four Chords, Minor Axis,
+  Two-Five-One, Twelve-Bar Blues, Andalusian Cadence, Canon Ground, Fifties, Dorian Vamp), which
+  load a key, a scale and a progression to start from.
+
+The Info View along the bottom says what anything under the mouse does.
 
 ## Build, test, install
 
-Needs Xcode and JUCE 8.0.14 at `~/Development/JUCE` (or `--juce DIR`).
+Needs Xcode and JUCE 8.0.14 at `~/Development/JUCE` (or `--juce DIR`; for the tests, `JUCE=DIR`).
 
 ```bash
 Tests/run_tests.sh
@@ -40,17 +61,44 @@ Tools/install.sh --validate
 Tests/run_snapshot.sh
 ```
 
-The first runs the core tests (plain C++, no JUCE). The second builds the VST3 and the Standalone
-(Release, universal), signs them ad hoc, installs them in `~/Library/Audio/Plug-Ins/VST3` and
-`~/Applications`, and runs `pluginval` at strictness 10. The third builds the editor snapshot
-test (JUCE): it renders the editor against the reference images in `Tests/fixtures/snapshot`,
-scripts the timeline's and the palette's mouse gestures, and checks state and real-time safety.
-User presets live in `~/Music/ChordZimmer/Presets/`.
+```bash
+Tests/run_bench.sh
+```
+
+- `run_tests.sh`: the core tests (plain C++, no JUCE): theory, palette, navigator, progression,
+  timeline gestures, playback, Match, Relations, export.
+- `install.sh --validate`: builds the VST3 and the Standalone (Release, universal), signs them ad
+  hoc, installs them in `~/Library/Audio/Plug-Ins/VST3` and `~/Applications`, and runs `pluginval`
+  at strictness 10.
+- `run_snapshot.sh`: the editor snapshot test (JUCE): renders the editor against the reference
+  images in `Tests/fixtures/snapshot` (`--update` after a deliberate UI change, `--no-pixels` on
+  another Mac), scripts the mouse gestures, and checks state, presets, real-time safety (no
+  allocation in `processBlock`), damaged states and host edge cases.
+- `run_bench.sh`: CPU per instance for 8 instances (PLAN.md's target: under 1%).
+
+CI (`.github/workflows/build.yml`) runs the core tests, the clean install with pluginval, the
+snapshot test without pixel comparison, and the benchmark. User presets live in
+`~/Music/ChordZimmer/Presets/`.
 
 ## In Live
 
-Turn on *Use VST3 Plug-In System Folders* (Settings → Plug-Ins) and rescan. Put ChordZimmer on a
-MIDI track, and give an instrument track *MIDI From: <that track> → ChordZimmer* with Monitor *In*.
+1. Turn on *Use VST3 Plug-In System Folders* (Settings → Plug-Ins) and rescan.
+2. Put ChordZimmer on a MIDI track, and an instrument on another with *MIDI From: <that track> →
+   ChordZimmer*. Arm that track, or set its Monitor to *In*, to hear ChordZimmer while Live is
+   stopped (Preview, the palette).
+3. Open the plug-in window, pick a key (the footer) or a template (the presets), and drag or
+   double-click chords onto the timeline. Play in Sync follows Live's transport; Preview plays on
+   its own.
+4. Drag *Drag MIDI* onto a track for a clip, or record the instrument track while it plays.
+
+Notes:
+
+- After installing a new version, quit and restart Live: it keeps the old plug-in loaded until it
+  quits.
+- A ChordZimmer saved in a set keeps that set's list of automatable parameters: one saved before a
+  version that added parameters (Listen, in Phase 5) doesn't show the new ones until the device is
+  put in again.
+- Live hides plug-in windows while it isn't the front app.
 
 ## Licence
 

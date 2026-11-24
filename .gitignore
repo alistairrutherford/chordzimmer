@@ -30,3 +30,7 @@ LiveBridge/.venv/
 LiveBridge/reports/
 __pycache__/
 .pytest_cache/
+
+# The snapshot app built against another JUCE (CI)
+Tests/Snapshot/Builds/CI/
+Tests/Snapshot/ChordZimmerSnapshot.ci.jucer

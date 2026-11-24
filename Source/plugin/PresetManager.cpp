@@ -141,12 +141,22 @@ namespace chordzimmer
         const auto& p = all[(size_t) index];
         tree.setProperty ("name", p.name, nullptr);
         tree.setProperty ("category", p.category, nullptr);
+        int key = 0;
         for (const auto& [id, value] : p.values)
         {
             juce::ValueTree param ("PARAM");
             param.setProperty ("id", id, nullptr);
             param.setProperty ("value", value, nullptr);
             tree.appendChild (param, nullptr);
+            if (id == params::key)
+                key = (int) value;
+        }
+        // A template's progression (Phase 8), as the state saves one (ChordZimmerProcessor::progressionToTree).
+        if (const auto text = templateProgressionText (p, key); text.isNotEmpty())
+        {
+            juce::ValueTree prog ("PROGRESSION");
+            prog.setProperty ("text", text, nullptr);
+            tree.appendChild (prog, nullptr);
         }
         return tree;
     }

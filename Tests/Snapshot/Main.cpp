@@ -35,18 +35,27 @@
 //                  allocation), the matches and the palette's rank badges, the note picker,
 //                  ±2 fifths, Chord from notes' Add and Set, Clear, one popover at a time,
 //                  Listen restored with the state; the editor-match snapshot
+//  13. templates   (Phase 8) the factory templates load their key, scale and progression
+//  14. hardening   (Phase 8; ChordMonkey's) no allocation in processBlock with everything on, the
+//                  timeline playing and being edited; damaged states (random bytes, NaN and
+//                  junk values, a broken progression and UI); zero-length, huge and mono blocks,
+//                  bypass, all-notes-off, a reset and a rate change, SysEx, an input flood; 64
+//                  instances
 //  12. Relations   (Phase 6) the focus (the home tonic, a palette click, a timeline selection),
 //                  the palette's tags and fading, Next ▸, Replace with; editor-relations
 //  11. Drag MIDI   (Phase 7) the timeline's drag-out: everything or the selection, named after it,
 //                  the render (Bass included) with section markers, Alt for chords only
 //
 //   ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
+//   ChordZimmerSnapshot --bench [seconds]     (Tests/run_bench.sh: 8 instances, CPU per instance)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../../Source/plugin/ChordZimmerProcessor.h"
 #include "../../Source/ui/ChordZimmerEditor.h"
 #include "../../Source/core/model/ChordSets.h"
+#include <chrono>
 #include <iostream>
 #include <pthread.h>
+#include <random>
 
 using namespace chordzimmer;
 
@@ -57,6 +66,7 @@ extern "C" void (*malloc_logger) (uint32_t, uintptr_t, uintptr_t, uintptr_t, uin
 namespace
 {
     std::atomic<pthread_t> allocWatched { nullptr };
+    void* volatile allocSink = nullptr;
     std::atomic<int> allocCount { 0 };
 
     void allocLogger (uint32_t type, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uint32_t)
@@ -677,12 +687,14 @@ namespace
 {
     struct PlayHead : juce::AudioPlayHead
     {
-        bool playing = true;
-        double ppq = 0.0, bpm = 120.0;
+        bool playing = true, looping = false;
+        double ppq = 0.0, bpm = 120.0, loopStart = 0.0, loopEnd = 8.0;
         juce::Optional<PositionInfo> getPosition() const override
         {
             PositionInfo info;
             info.setIsPlaying (playing);
+            info.setIsLooping (looping);
+            info.setLoopPoints (juce::AudioPlayHead::LoopPoints { loopStart, loopEnd });
             info.setPpqPosition (ppq);
             info.setBpm (bpm);
             info.setTimeSignature (juce::AudioPlayHead::TimeSignature { 4, 4 });
@@ -691,8 +703,11 @@ namespace
         }
         void advance (int samples, double rate)
         {
-            if (playing)
-                ppq += samples * bpm / (60.0 * rate);
+            if (! playing)
+                return;
+            ppq += samples * bpm / (60.0 * rate);
+            if (looping && ppq >= loopEnd)
+                ppq = loopStart + (ppq - loopEnd);
         }
     };
 }
@@ -1020,12 +1035,432 @@ static void testRelations (const juce::File& fixtures, const juce::File& out, bo
     closeEditor (*p, editor);
 }
 
+//==============================================================================
+// 13: factory templates (Phase 8, PLAN.md §2).
+
+static void testTemplates()
+{
+    std::cout << "== factory templates ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    const auto& all = factoryPresets();
+    check (p->getNumPrograms() == 19 && all[11].name == "Four Chords" && all[18].name == "Dorian Vamp",
+           "19 programs: Init and 0.0.1's ten keep their numbers, the 8 templates follow");
+    struct Want { const char* name; const char* layout; int key; Scale scale; };
+    const Want want[] = {
+        { "Four Chords", "Verse[C:4 G:4 Am:4 F:4] Chorus[F:4 C:4 G:4 Am:4]", 0, Scale::Major },
+        { "Minor Axis", "Verse[Am:4 F:4 C:4 G:4] Chorus[F:4 G:4 Am:8]", 9, Scale::NaturalMinor },
+        { "Two-Five-One", "A[Cm7:4 F7:4 Bbmaj7:8] Turnaround[Dm7:2 G7:2 Cm7:2 F7:2]", 10, Scale::Major },
+        { "Twelve-Bar Blues", "Blues[A7:16 D7:8 A7:8 E7:4 D7:4 A7:4 E7:4]", 9, Scale::Mixolydian },
+        { "Andalusian Cadence", "Cadence[Dm:4 C:4 Bb:4 A:4]", 2, Scale::HarmonicMinor },
+        { "Canon Ground", "Canon[D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2]", 2, Scale::Major },
+        { "Fifties", "Verse[G:4 Em:4 C:4 D:4] Bridge[C:4 Cm:4 G:8]", 7, Scale::Major },
+        { "Dorian Vamp", "Vamp[Dm7:8 G7:8]", 2, Scale::Dorian },
+    };
+    bool allOk = true;
+    juce::String why;
+    for (int i = 11; i < 19; ++i)
+    {
+        const auto& w = want[i - 11];
+        p->setCurrentProgram (i);
+        const auto got = layout (p->getProgression());
+        const bool ok = all[(size_t) i].name == w.name && all[(size_t) i].category == "Templates" && got == w.layout
+                     && (int) get (*p, params::key) == w.key && (int) get (*p, params::scale) == (int) w.scale && ! p->undoState().canUndo;
+        if (! ok && why.isEmpty())
+            why = juce::String (w.name) + ": " + got;
+        allOk = allOk && ok;
+    }
+    check (allOk, "each template loads its key, scale and progression, the history starting afresh" + (why.isEmpty() ? juce::String() : " (" + why + ")"));
+    const auto before = p->getProgression();
+    p->setCurrentProgram (1);   // Pop Anthem: no progression
+    check (p->getProgression() == before, "a preset without a progression leaves the timeline as it was");
+}
+
+//==============================================================================
+// 14: hardening (Phase 8; ChordMonkey's Phase 8 checks, for ChordZimmer's timeline).
+
+namespace
+{
+    // Every effect at once, the timeline playing in Sync and keys playing chords.
+    void everythingOn (ChordZimmerProcessor& p)
+    {
+        p.setProgression (song());
+        set (p, params::chordGroup, (float) (int) ChordGroup::Thirteenths);
+        set (p, params::stack, (float) (int) StackMode::PlusOneAndTwo);
+        set (p, params::velocity, (float) (int) VelocityCurve::House);
+        set (p, params::hold, (float) (int) HoldMode::Bar);
+        set (p, params::voiceLeading, 1.0f);
+        set (p, params::voicing, (float) (int) VoicingMode::Wide);
+        set (p, params::bass, (float) (int) BassMode::RootFifth);
+        set (p, params::strum, (float) (int) StrumMode::Up);
+        set (p, params::play, 1.0f);
+    }
+
+    // Parameters that aren't finite, or outside their range.
+    int insaneParameters (ChordZimmerProcessor& p)
+    {
+        int n = 0;
+        for (auto* param : p.getParameters())
+            if (auto* r = dynamic_cast<juce::RangedAudioParameter*> (param))
+            {
+                const float v = r->getValue();
+                n += std::isfinite (v) && v >= 0.0f && v <= 1.0f ? 0 : 1;
+            }
+        return n;
+    }
+
+    // A key (C3) still plays a chord, and letting go ends it.
+    bool playsAChord (ChordZimmerProcessor& p)
+    {
+        set (p, params::listen, 0.0f);
+        set (p, params::analyse, 0.0f);
+        set (p, params::detect, 0.0f);
+        set (p, params::enable, 1.0f);
+        const auto on = noteOns (block (p, { juce::MidiMessage::noteOn (1, 48, (juce::uint8) 100) }));
+        block (p, { juce::MidiMessage::noteOff (1, 48) });
+        block (p);
+        return on.size() >= 3 && p.soundingNotes.load() == 0;
+    }
+}
+
+static void testHardening()
+{
+    std::cout << "== hardening: no allocation on the audio thread ==\n";
+    {
+        const int before = allocCount.load();
+        {
+            AllocWatch watch;
+            allocSink = new int (8);
+            delete static_cast<int*> (allocSink);
+            allocSink = std::malloc (1 << 20);
+            std::free (allocSink);
+        }
+        check (allocCount.load() - before >= 2, "the malloc hook sees allocations (" + juce::String (allocCount.load() - before) + " counted)");
+    }
+    {
+        // Two instances with everything on under a looping transport; between blocks (as the
+        // host and the message thread would) parameters change, the transport stops, starts and
+        // moves its loop, the timeline is edited, previews start, Listen turns on, bypass toggles.
+        auto a = std::make_unique<ChordZimmerProcessor>();
+        auto b = std::make_unique<ChordZimmerProcessor>();
+        PlayHead head;
+        head.looping = true;
+        head.loopEnd = 16.0;
+        for (auto* p : { a.get(), b.get() })
+        {
+            p->setPlayHead (&head);
+            p->prepareToPlay (48000.0, 256);
+            everythingOn (*p);
+        }
+        juce::AudioBuffer<float> audio (2, 256);
+        juce::MidiBuffer midi;
+        midi.ensureSize (1 << 16);
+        std::mt19937 rng (8);
+        int allocations = 0, blocks = 0, peak = 0, bypassed = 0, edits = 0;
+        for (int i = 0; i < 4000; ++i)
+        {
+            if (rng() % 50 == 0) set (*a, params::key, (float) (rng() % 12));
+            if (rng() % 90 == 0) set (*a, params::chordGroup, (float) (rng() % numChordGroups));
+            if (rng() % 120 == 0) set (*b, params::syncMode, (float) (rng() % 2));
+            if (rng() % 150 == 0) set (*a, params::loop, (float) (rng() % 2));
+            if (rng() % 200 == 0) set (*b, params::listen, (float) (rng() % 2));
+            if (rng() % 200 == 0) head.playing = ! head.playing;
+            if (rng() % 300 == 0) { head.loopStart = (double) (rng() % 4); head.loopEnd = head.loopStart + 0.5 + (rng() % 8); }
+            if (rng() % 40 == 0) a->pushUiNote (48 + (int) (rng() % 30), 100, rng() % 2 == 0);
+            if (rng() % 60 == 0)
+            {
+                ++edits;
+                const int s = (int) (rng() % 3);
+                a->editProgression ("Fuzz", [&] (ChordProgression& q) { return q.validSection (s) && q.resizeSection (s, 384 + (int) (rng() % 8) * 96); });
+                if (rng() % 2 == 0)
+                    a->undoProgression();
+                b->setLoopSelection (Selection::section (s));
+            }
+            if (rng() % 70 == 0)
+            {
+                const auto prog = a->getProgression();
+                if (const auto* c = prog.chord ({ 0, (int) (rng() % 4) }))
+                    b->previewChord (*c, rng() % 2 == 0 ? 0.0 : 1.0);
+                else
+                    b->endPreview();
+            }
+            if (rng() % 100 == 0) juce::MessageManager::getInstance()->runDispatchLoopUntil (1);   // the timers
+            for (auto* p : { a.get(), b.get() })
+            {
+                midi.clear();
+                if (rng() % 8 == 0)
+                    midi.addEvent (rng() % 2 == 0 ? juce::MidiMessage::noteOn (1, 36 + (int) (rng() % 48), (juce::uint8) 90)
+                                                  : juce::MidiMessage::noteOff (1, 36 + (int) (rng() % 48)), (int) (rng() % 256));
+                const bool bypass = p == b.get() && i % 500 > 480;
+                const int before = allocCount.load();
+                {
+                    AllocWatch watch;
+                    if (bypass)
+                        p->processBlockBypassed (audio, midi);
+                    else
+                        p->processBlock (audio, midi);
+                }
+                allocations += allocCount.load() - before;
+                bypassed += bypass ? 1 : 0;
+                peak = std::max (peak, midi.getNumEvents());
+                ++blocks;
+            }
+            head.advance (256, 48000.0);
+        }
+        check (allocations == 0, juce::String (blocks) + " blocks of two instances with everything on and the timeline playing (" + juce::String (edits)
+                                     + " edits, " + juce::String (bypassed) + " bypassed, up to " + juce::String (peak) + " events out): "
+                                     + juce::String (allocations) + " allocations in processBlock");
+        for (auto* p : { a.get(), b.get() })
+            p->setPlayHead (nullptr);
+    }
+
+    std::cout << "== hardening: damaged saved states ==\n";
+    {
+        auto p = std::make_unique<ChordZimmerProcessor>();
+        p->prepareToPlay (44100.0, 512);
+        std::mt19937 rng (88);
+        int insane = 0;
+        for (int i = 0; i < 300; ++i)
+        {
+            juce::MemoryBlock junk ((size_t) (rng() % 4096));
+            for (size_t k = 0; k < junk.getSize(); ++k)
+                junk[k] = (char) (rng() & 0xff);
+            if (i % 3 == 0 && junk.getSize() > 8)
+                std::memcpy (junk.getData(), "VC2!", 4);   // JUCE's binary-XML header, garbage after
+            p->setStateInformation (junk.getData(), (int) junk.getSize());
+            insane += insaneParameters (*p);
+        }
+        p->setStateInformation (nullptr, 0);
+        p->setStateInformation ("xx", -5);
+        check (insane == 0 && playsAChord (*p), "300 blobs of random bytes (a third with a valid header) are ignored; the instance still plays");
+
+        const char* values[] = { "nan", "inf", "-inf", "1e300", "-1e300", "abc", "", "0x7fffffff", "-0" };
+        int worst = 0;
+        for (const char* v : values)
+        {
+            juce::String xml ("<ChordZimmer program=\"99999\" presetName=\"\">");
+            for (auto* param : p->getParameters())
+                if (auto* r = dynamic_cast<juce::RangedAudioParameter*> (param))
+                    xml << "<PARAM id=\"" << r->paramID << "\" value=\"" << v << "\"/>";
+            xml << "<PARAM id=\"noSuchParameter\" value=\"1\"/><PARAM id=\"key\" value=\"3\"/>"
+                   "<PROGRESSION text=\"czp1 S:9:" << v << " C:99:0.4.7:384:0:0:-1\"/><WORKSPACE version=\"1\"><PATTERN index=\"7\" text=\"" << v << "\"/></WORKSPACE>"
+                   "<UI keyboard=\"maybe\" width=\"-1\" height=\"1e9\" paletteFifths=\"" << v << "\" paletteScale=\"999\" snap=\"-7\" zoom=\"" << v << "\"/></ChordZimmer>";
+            juce::MemoryBlock state;
+            juce::AudioProcessor::copyXmlToBinary (*juce::parseXML (xml), state);
+            p->setStateInformation (state.getData(), (int) state.getSize());
+            worst = std::max (worst, insaneParameters (*p));
+            worst += p->getProgression().empty() ? 0 : 1;       // the damaged progression text loads empty
+            std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditorIfNeeded());   // opens with the UI's garbage
+            if (auto* e = dynamic_cast<ChordZimmerEditor*> (editor.get()))
+                e->refreshNow();
+            p->editorBeingDeleted (editor.get());
+            editor.reset();
+            worst += p->getCurrentProgram() < 0 || p->getCurrentProgram() >= p->getNumPrograms() ? 1 : 0;
+        }
+        check (worst == 0 && playsAChord (*p), "states whose every value is nan, inf, -inf, +/-1e300, text or empty, with unknown IDs, a damaged "
+                                               "progression and workspace and a nonsense UI: parameters stay in range, the progression loads "
+                                               "empty, the editor opens, the instance plays");
+
+        auto tree = p->presetState();
+        tree.getChildWithProperty ("id", params::key).setProperty ("value", "nan", nullptr);
+        set (*p, params::key, 5.0f);
+        p->applyPreset (tree, "User", "Damaged");
+        check ((int) get (*p, params::key) == 0, "a preset whose Key is NaN loads Key's default (C)");
+    }
+
+    std::cout << "== hardening: host edge cases ==\n";
+    {
+        auto p = std::make_unique<ChordZimmerProcessor>();
+        p->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> none (2, 0), huge (2, 8192), mono (1, 512);
+        auto run = [&p] (juce::AudioBuffer<float>& audio, std::initializer_list<juce::MidiMessage> events, bool bypass = false)
+        {
+            juce::MidiBuffer midi;
+            for (const auto& e : events)
+                midi.addEvent (e, 0);
+            if (bypass)
+                p->processBlockBypassed (audio, midi);
+            else
+                p->processBlock (audio, midi);
+            return midi;
+        };
+
+        const auto zero = run (none, { juce::MidiMessage::noteOn (1, 48, (juce::uint8) 100) });
+        const auto big = run (huge, { juce::MidiMessage::noteOff (1, 48), juce::MidiMessage::noteOn (1, 50, (juce::uint8) 100) });
+        const auto monoOut = run (mono, { juce::MidiMessage::noteOff (1, 50) });
+        check (noteOns (zero) == std::vector<int> { 48, 52, 55 } && noteOns (big) == std::vector<int> { 50, 53, 57 } && noteOffs (big) == 3
+                   && noteOffs (monoOut) == 3 && p->soundingNotes.load() == 0,
+               "a zero-length block plays its key; an 8192-sample block after prepareToPlay (..., 512) and a mono block work");
+
+        run (mono, { juce::MidiMessage::noteOn (1, 48, (juce::uint8) 100) });
+        const auto bypassed = run (mono, { juce::MidiMessage::noteOn (1, 64, (juce::uint8) 90) }, true);
+        check (noteOffs (bypassed) == 3 && noteOns (bypassed) == std::vector<int> { 64 }, "host bypass while a chord sounds ends it and passes input through");
+        run (mono, { juce::MidiMessage::noteOff (1, 64), juce::MidiMessage::noteOff (1, 48) }, true);
+
+        // The timeline playing in Preview, then the host's all-notes-off, a reset and a rate change.
+        p->setProgression (song());
+        set (*p, params::syncMode, 1.0f);
+        set (*p, params::play, 1.0f);
+        const auto started = run (mono, {});
+        const auto allOff = run (mono, { juce::MidiMessage::allNotesOff (1) });
+        int cc = 0;
+        for (const auto m : allOff)
+            cc += m.getMessage().isAllNotesOff() ? 1 : 0;
+        set (*p, params::play, 0.0f);
+        run (mono, {});
+        run (mono, { juce::MidiMessage::noteOn (1, 48, (juce::uint8) 100) });
+        p->releaseResources();
+        const auto afterRelease = run (mono, {});
+        p->prepareToPlay (96000.0, 128);
+        run (mono, { juce::MidiMessage::noteOff (1, 48), juce::MidiMessage::noteOn (1, 52, (juce::uint8) 100) });
+        p->prepareToPlay (44100.0, 2048);
+        const auto afterRate = run (mono, {});
+        run (mono, { juce::MidiMessage::noteOff (1, 52) });
+        check (noteOns (started).size() == 3 && noteOffs (allOff) >= 3 && cc == 1 && noteOffs (afterRelease) == 3 && noteOffs (afterRate) == 3
+                   && p->soundingNotes.load() == 0,
+               "the timeline in Preview stops on the host's all-notes-off (the CC passes on); releaseResources and a rate change end a chord");
+
+        const juce::uint8 sysex[] = { 0x43, 0x10, 0x4c, 0x00, 0x00, 0x7e, 0x00 };
+        const auto passed = run (mono, { juce::MidiMessage::createSysExMessage (sysex, (int) sizeof (sysex)) });
+        bool sysexIntact = false;
+        for (const auto m : passed)
+            sysexIntact |= m.getMessage().isSysEx() && m.getMessage().getSysExDataSize() == (int) sizeof (sysex)
+                        && std::memcmp (m.getMessage().getSysExData(), sysex, sizeof (sysex)) == 0;
+        check (sysexIntact, "SysEx passes through unchanged");
+
+        juce::MidiBuffer flood;
+        for (int i = 0; i < 2900; ++i)
+            flood.addEvent (juce::MidiMessage::noteOn (1, 36 + i % 48, (juce::uint8) 100), i % 400);
+        for (int n = 0; n < 128; ++n)
+            flood.addEvent (juce::MidiMessage::noteOff (1, n), 450);
+        juce::AudioBuffer<float> audio (2, 512);
+        p->processBlock (audio, flood);
+        run (mono, {});
+        check (p->soundingNotes.load() == 0, "2900 note-ons and 128 key-ups in one block (input holds 2048): the key-ups get in, nothing sounds after");
+    }
+
+    std::cout << "== hardening: many instances ==\n";
+    {
+        std::vector<std::unique_ptr<ChordZimmerProcessor>> all;
+        for (int i = 0; i < 64; ++i)
+        {
+            all.push_back (std::make_unique<ChordZimmerProcessor>());
+            all.back()->prepareToPlay (44100.0, 256);
+            all.back()->setProgression (song());
+        }
+        int played = 0;
+        for (auto& p : all)
+            played += noteOns (block (*p, { juce::MidiMessage::noteOn (1, 48, (juce::uint8) 100) })).size() == 3 ? 1 : 0;
+        std::shuffle (all.begin(), all.end(), std::mt19937 (64));
+        while (all.size() > 2)
+            all.pop_back();
+        int ended = 0;
+        for (auto& p : all)
+        {
+            block (*p, { juce::MidiMessage::noteOff (1, 48) });
+            ended += p->soundingNotes.load() == 0 ? 1 : 0;
+        }
+        check (played == 64 && ended == 2, "64 instances with a progression play; destroyed in random order, the last two still work");
+    }
+}
+
+//==============================================================================
+// The benchmark (PLAN.md §6 Phase 8: 8 instances under 1 % CPU each; Tests/run_bench.sh).
+
+static int runBench (double seconds)
+{
+    constexpr int instances = 8;
+    constexpr double rate = 44100.0;
+    std::cout << "== CPU per instance (" << instances << " instances, " << seconds << " s of audio at 44.1 kHz, 120 BPM) ==\n"
+              << "   scenario           block   mean % of real time   99.9th percentile / worst block (% of a block's duration)\n";
+    const char* names[] = { "idle", "timeline (Sync)", "everything on", "Preview", "Listen", "Detect" };
+    double worstMean = 0.0;
+    for (int scenario = 0; scenario < 6; ++scenario)
+        for (const int blockSize : { 32, 128, 512 })
+        {
+            std::vector<std::unique_ptr<ChordZimmerProcessor>> procs;
+            PlayHead head;
+            head.looping = true;
+            head.loopEnd = 48.0;
+            head.playing = scenario != 3;
+            for (int i = 0; i < instances; ++i)
+            {
+                procs.push_back (std::make_unique<ChordZimmerProcessor>());
+                auto& p = *procs.back();
+                p.setPlayHead (&head);
+                p.prepareToPlay (rate, blockSize);
+                if (scenario == 1 || scenario == 3)
+                {
+                    p.setProgression (song());
+                    set (p, params::play, 1.0f);
+                }
+                if (scenario == 2)
+                    everythingOn (p);
+                if (scenario == 3)
+                    set (p, params::syncMode, 1.0f);
+                if (scenario == 4)
+                    set (p, params::listen, 1.0f);
+                if (scenario == 5)
+                    set (p, params::detect, (float) (int) params::DetectMode::Capture);
+            }
+            // Listen, Detect and everything on: sixteenth notes up and down a scale come in.
+            const int sixteenth = (int) (rate * 60.0 / 120.0 / 4.0);
+            int tuneNote = -1;
+            juce::AudioBuffer<float> audio (2, blockSize);
+            juce::MidiBuffer midi;
+            midi.ensureSize (1 << 16);
+            const int numBlocks = (int) (seconds * rate / blockSize);
+            double total = 0.0, worst = 0.0;
+            std::vector<double> times;
+            times.reserve ((size_t) numBlocks * instances);
+            for (int n = 0; n < numBlocks; ++n)
+            {
+                juce::MidiBuffer tune;
+                if (scenario == 2 || scenario >= 4)
+                    for (int64_t smp = ((int64_t) n * blockSize + sixteenth - 1) / sixteenth * sixteenth; smp < (int64_t) (n + 1) * blockSize; smp += sixteenth)
+                    {
+                        const int at = (int) (smp - (int64_t) n * blockSize);
+                        if (tuneNote >= 0)
+                            tune.addEvent (juce::MidiMessage::noteOff (1, tuneNote), at);
+                        const int step = (int) ((smp / sixteenth) % 14);
+                        tuneNote = 60 + scaleOffset (Scale::NaturalMinor, step < 7 ? step : 14 - step);
+                        tune.addEvent (juce::MidiMessage::noteOn (1, tuneNote, (juce::uint8) 100), at);
+                    }
+                for (auto& p : procs)
+                {
+                    midi.clear();
+                    midi.addEvents (tune, 0, -1, 0);
+                    const auto t0 = std::chrono::steady_clock::now();
+                    p->processBlock (audio, midi);
+                    const double dt = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+                    total += dt;
+                    worst = std::max (worst, dt);
+                    times.push_back (dt);
+                }
+                head.advance (blockSize, rate);
+            }
+            const double audioSeconds = numBlocks * blockSize / rate;
+            const double mean = 100.0 * total / instances / audioSeconds;
+            const double peak = 100.0 * worst / (blockSize / rate);
+            std::nth_element (times.begin(), times.begin() + (long) (times.size() * 999 / 1000), times.end());
+            const double p999 = 100.0 * times[times.size() * 999 / 1000] / (blockSize / rate);
+            worstMean = std::max (worstMean, mean);
+            std::printf ("   %-17s %6d   %10.4f%%            %8.3f%% / %.3f%%\n", names[scenario], blockSize, mean, p999, peak);
+            for (auto& p : procs)
+                p->setPlayHead (nullptr);
+        }
+    check (worstMean < 1.0, "every scenario and block size: under 1% of one core per instance (worst mean " + juce::String (worstMean, 4) + "%)");
+    return failures == 0 ? 0 : 1;
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
+    if (argc >= 2 && juce::String (argv[1]) == "--bench")
+        return runBench (argc >= 3 ? juce::String (argv[2]).getDoubleValue() : 20.0);
     if (argc < 3)
     {
-        std::cerr << "usage: ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]\n";
+        std::cerr << "usage: ChordZimmerSnapshot <fixtures dir> <output dir> [--update | --no-pixels]\n"
+                     "       ChordZimmerSnapshot --bench [seconds]\n";
         return 2;
     }
     const juce::File fixtures (juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]));
@@ -1044,6 +1479,8 @@ int main (int argc, char** argv)
     testMatch (fixtures, out, update);
     testDragOut();
     testRelations (fixtures, out, update);
+    testTemplates();
+    testHardening();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;
