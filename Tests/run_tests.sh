@@ -51,6 +51,7 @@ compile_and_run test_progression
 compile_and_run test_timeline
 compile_and_run test_matcher
 compile_and_run test_relations
+compile_and_run test_import
 
 echo ""
 echo "All test binaries passed."

@@ -62,6 +62,7 @@
       <GROUP id="csGrp4" name="core/midiio">
         <FILE id="csF052" name="MidiFile.h" compile="0" resource="0" file="Source/core/midiio/MidiFile.h"/>
         <FILE id="csF053" name="ExportRecorder.h" compile="0" resource="0" file="Source/core/midiio/ExportRecorder.h"/>
+        <FILE id="czF701" name="MidiImport.h" compile="0" resource="0" file="Source/core/midiio/MidiImport.h"/>
       </GROUP>
       <GROUP id="csGrp2" name="plugin">
         <FILE id="csF011" name="ChordZimmerProcessor.h" compile="0" resource="0" file="Source/plugin/ChordZimmerProcessor.h"/>

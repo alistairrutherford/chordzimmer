@@ -20,6 +20,7 @@
 
 #include "Panels.h"
 #include "../core/engine/NoteCollector.h"
+#include "../core/midiio/MidiImport.h"
 #include "../core/model/ChordFromNotes.h"
 
 namespace chordzimmer::ui
@@ -60,7 +61,8 @@ namespace chordzimmer::ui
         std::vector<ChordMatch> matches;
     };
 
-    class MatchPanel : public juce::Component
+    class MatchPanel : public juce::Component,
+                       public juce::FileDragAndDropTarget
     {
     public:
         MatchPanel (ChordZimmerProcessor&, Bindings&);
@@ -75,6 +77,15 @@ namespace chordzimmer::ui
         juce::String fromNotesName() const;
         // The timeline chord Set would replace ("" for none).
         void setSetTarget (const juce::String& chordName);
+
+        // A .mid dropped on the popover (PLAN.md §6 Phase 9): its melody (the notes outside its
+        // chords, MidiImport.h) is the note set, until Clear (picked notes still win).
+        bool importFile (const juce::File&);
+        const juce::String& importedName() const noexcept { return importedFrom; }
+        bool isInterestedInFileDrag (const juce::StringArray& files) override;
+        void fileDragEnter (const juce::StringArray&, int, int) override;
+        void fileDragExit (const juce::StringArray&) override;
+        void filesDropped (const juce::StringArray& files, int, int) override;
 
         // To the timeline (the editor wires them) and the processor's previews.
         std::function<void (const ProgressionChord&)> onSet, onAdd;
@@ -100,7 +111,9 @@ namespace chordzimmer::ui
         int homeKey = 0;
         Scale homeScale = Scale::Major;
         int beatsPerBar = 4;
-        NoteSet heard, notes;
+        NoteSet heard, notes, imported;
+        juce::String importedFrom;
+        bool fileOver = false;
         std::vector<ChordMatch> matches;
         juce::String name, setTarget;
 

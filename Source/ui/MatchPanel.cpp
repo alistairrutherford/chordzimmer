@@ -191,11 +191,13 @@ namespace chordzimmer::ui
         bars.setComponentID ("ui.matchBars");
         bars.onChange = [this] { recompute(); };
         useHeard.setComponentID ("ui.matchUseHeard");
-        useHeard.onClick = [this] { picker.setPicked (heard.mask()); };
+        useHeard.onClick = [this] { picker.setPicked ((imported.empty() ? heard : imported).mask()); };
         clear.setComponentID ("ui.matchClear");
         clear.onClick = [this]
         {
             processor.clearCollectedNotes();
+            imported = {};
+            importedFrom = {};
             heard = {};
             picker.setHeard (heard);
             picker.setPicked (0);
@@ -255,7 +257,7 @@ namespace chordzimmer::ui
         const NoteSet now = noteSetFromCollected (processor.collectedNotes(), windowBeats());
         const bool heardChanged = now.weight != heard.weight || now.bass != heard.bass;
         heard = now;
-        picker.setHeard (heard);
+        picker.setHeard (imported.empty() ? heard : imported);
         if (heardChanged || contextChanged)
             recompute();
     }
@@ -285,7 +287,7 @@ namespace chordzimmer::ui
     void MatchPanel::recompute()
     {
         const unsigned picked = picker.picked();
-        notes = picked != 0 ? NoteSet::fromMask (picked) : heard;
+        notes = picked != 0 ? NoteSet::fromMask (picked) : (imported.empty() ? heard : imported);
         MatchOptions o;
         o.fifthsAround = wide.getToggleState() ? 2 : 0;
         matches = matchPalette (notes, context, o);
@@ -301,6 +303,43 @@ namespace chordzimmer::ui
         }
         add.setEnabled (! chord.chord.empty());
         repaint (nameArea);
+    }
+
+    bool MatchPanel::importFile (const juce::File& file)
+    {
+        juce::MemoryBlock data;
+        if (! file.loadFileAsData (data))
+            return false;
+        const auto r = importMidiFile ((const uint8_t*) data.getData(), data.getSize(), homeKey, homeScale, file.getFileNameWithoutExtension().toStdString());
+        if (! r.ok() || r.melody.empty())
+            return false;
+        imported = r.melody;
+        importedFrom = file.getFileName();
+        picker.setPicked (0);
+        picker.setHeard (imported);
+        recompute();
+        repaint();
+        return true;
+    }
+
+    bool MatchPanel::isInterestedInFileDrag (const juce::StringArray& files)
+    {
+        for (const auto& f : files)
+            if (f.endsWithIgnoreCase (".mid") || f.endsWithIgnoreCase (".midi") || f.endsWithIgnoreCase (".smf"))
+                return true;
+        return false;
+    }
+
+    void MatchPanel::fileDragEnter (const juce::StringArray&, int, int) { fileOver = true; repaint(); }
+    void MatchPanel::fileDragExit (const juce::StringArray&) { fileOver = false; repaint(); }
+
+    void MatchPanel::filesDropped (const juce::StringArray& files, int, int)
+    {
+        fileOver = false;
+        for (const auto& f : files)
+            if (isInterestedInFileDrag ({ f }) && importFile (juce::File (f)))
+                break;
+        repaint();
     }
 
     juce::String MatchPanel::infoKeyAt (juce::Point<int> p) const
@@ -329,6 +368,16 @@ namespace chordzimmer::ui
             g.setColour (colours::dim);
             g.setFont (headingFont (11.5f, true));
             g.drawText (c.title.toUpperCase(), c.bounds.reduced (12, 0).removeFromTop (titleHeight).translated (0, 3), juce::Justification::centredLeft);
+        }
+        // Where the notes come from: a file dropped in, else Listen and the picker.
+        g.setFont (font (10.5f));
+        g.setColour (importedFrom.isNotEmpty() ? night::accent : colours::faint);
+        g.drawText (importedFrom.isNotEmpty() ? "From " + importedFrom : juce::String ("or drop a .mid here"),
+                    cards[0].bounds.reduced (12, 0).removeFromTop (titleHeight).translated (0, 3), juce::Justification::centredRight, true);
+        if (fileOver)
+        {
+            g.setColour (night::accent);
+            g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (2.0f), night::panelRadius, 2.0f);
         }
         g.setFont (font (12.0f));
         g.setColour (colours::dim);

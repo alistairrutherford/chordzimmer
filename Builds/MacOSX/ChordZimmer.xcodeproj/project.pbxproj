@@ -212,6 +212,7 @@
 		D7B3739D420AA52E75C4F789 /* MidiFile.h */ /* MidiFile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MidiFile.h; path = ../../Source/core/midiio/MidiFile.h; sourceTree = SOURCE_ROOT; };
 		D8C023023CAE94EA27EEE58E /* include_juce_core_CompilationTime.cpp */ /* include_juce_core_CompilationTime.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_core_CompilationTime.cpp; path = ../../JuceLibraryCode/include_juce_core_CompilationTime.cpp; sourceTree = SOURCE_ROOT; };
 		DB555612801E673645ED11E3 /* Progressions.h */ /* Progressions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Progressions.h; path = ../../Source/core/theory/Progressions.h; sourceTree = SOURCE_ROOT; };
+		DFE2BA0CEC674D67986185A8 /* MidiImport.h */ /* MidiImport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MidiImport.h; path = ../../Source/core/midiio/MidiImport.h; sourceTree = SOURCE_ROOT; };
 		E0EAF6488CE972BD2BBBAFA1 /* Stack.h */ /* Stack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Stack.h; path = ../../Source/core/engine/Stack.h; sourceTree = SOURCE_ROOT; };
 		E253118CB7E02AF01F1418C3 /* InfoView.h */ /* InfoView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = InfoView.h; path = ../../Source/ui/InfoView.h; sourceTree = SOURCE_ROOT; };
 		E2D139EB8E5FA50884453071 /* include_juce_audio_processors_headless_lv2_libs.cpp */ /* include_juce_audio_processors_headless_lv2_libs.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_audio_processors_headless_lv2_libs.cpp; path = ../../JuceLibraryCode/include_juce_audio_processors_headless_lv2_libs.cpp; sourceTree = SOURCE_ROOT; };
@@ -349,6 +350,7 @@
 			children = (
 				D7B3739D420AA52E75C4F789,
 				45C7EAE8F7313131E2DBC2ED,
+				DFE2BA0CEC674D67986185A8,
 			);
 			name = core/midiio;
 			sourceTree = "<group>";

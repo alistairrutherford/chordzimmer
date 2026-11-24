@@ -9,7 +9,7 @@ It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PL
 
 ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual text or name.
 
-**Version 0.0.1** (Phases 0–8 of PLAN.md done, 2026-11-24; not released yet). What changed:
+**Version 0.0.1** (all of PLAN.md's phases done, the optional Phase 9 included, 2026-11-24; not released yet). What changed:
 [CHANGELOG.md](CHANGELOG.md).
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
@@ -36,7 +36,8 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
   function (V/vi, IV, rel, sub), notes in common and voice-leading distance, and **Next ▸**, five
   usual follow-ups.
 - **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with
-  the section names as markers.
+  the section names as markers. And the other way: drop a `.mid` on the timeline for its chords
+  (its markers become sections), or on Match for its melody.
 - **Performance** (the footer): strum, velocity, voicing, bass, voice leading, octave, stack, and
   what keys played in do (chords of the home key, Heard, Detect).
 - **Presets:** the factory presets, your own, and **Templates** (Four Chords, Minor Axis,

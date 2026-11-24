@@ -66,6 +66,7 @@ namespace chordzimmer
             processor.uiState.setProperty (snapId, (int) s, nullptr);
         };
         timeline.onZoom = [this] (double ppb) { processor.uiState.setProperty (zoomId, ppb, nullptr); };
+        timeline.onImport = [this] (const juce::String& what) { info.showKey ("display.import", what); };
 
         outputKeys.setVisible (keyboardShown);
         topBar.setKeyboardShown (keyboardShown);

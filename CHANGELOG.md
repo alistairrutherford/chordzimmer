@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: Phase 9, MIDI files in
+
+PLAN.md §6, Phase 9 (the optional one).
+
+- **Drop a .mid on the timeline:** its chords go in where it lands, as one undo step. Chords
+  are found as Detect finds them (struck together or rolled, three notes or a power chord, a
+  rhythm on one chord counted once, a melody line on top left out) and named with their
+  inversions and bass notes. The file's markers become sections (so a Drag MIDI export comes
+  back as it was), else one section named after the file. The Info View says what came in.
+- **Drop a .mid on Match:** its melody (the notes outside its chords) is what's matched, until
+  Clear; picked notes still win.
+- Tests: `test_import` on nine fixture files written by `Tools/gen_import_fixtures.py`; the
+  snapshot test drops files on the timeline and on Match.
+
 ## Unreleased: Phase 8, hardening and install
 
 PLAN.md §6, Phase 8.

@@ -41,6 +41,8 @@
 //                  junk values, a broken progression and UI); zero-length, huge and mono blocks,
 //                  bypass, all-notes-off, a reset and a rate change, SysEx, an input flood; 64
 //                  instances
+//  15. import      (Phase 9) a .mid dropped on the timeline (its chords, its markers' sections,
+//                  one undo step) and on Match (its melody); files without chords or not MIDI
 //  12. Relations   (Phase 6) the focus (the home tonic, a palette click, a timeline selection),
 //                  the palette's tags and fading, Next ▸, Replace with; editor-relations
 //  11. Drag MIDI   (Phase 7) the timeline's drag-out: everything or the selection, named after it,
@@ -272,9 +274,11 @@ namespace
         e.reset();
     }
 
+    // Not on screen: the test rig (Live's), Pattern (retired) and the import message (shown
+    // after a .mid is dropped, not something to point at).
     bool exempt (const juce::String& id)
     {
-        return id == params::testPattern || id == params::testWorkspace || id == params::pattern;
+        return id == params::testPattern || id == params::testWorkspace || id == params::pattern || id == "display.import";
     }
 }
 
@@ -1452,6 +1456,68 @@ static int runBench (double seconds)
     return failures == 0 ? 0 : 1;
 }
 
+//==============================================================================
+// 15: MIDI files dropped in (Phase 9).
+
+static void testImport()
+{
+    std::cout << "== MIDI import ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    p->setProgression (song());
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->refreshNow();
+    auto& t = editor->getTimeline();
+    const auto dir = juce::File::getCurrentWorkingDirectory().getChildFile ("fixtures/import");
+
+    check (t.isInterestedInFileDrag ({ dir.getChildFile ("block_chords.mid").getFullPathName() }) && ! t.isInterestedInFileDrag ({ "/tmp/a.wav" }),
+           "the timeline takes .mid files, not others");
+    // Dropped past the end: a new section named after the file.
+    const float end = t.tabBounds (2).getRight() + 40.0f;
+    t.filesDropped ({ dir.getChildFile ("block_chords.mid").getFullPathName() }, (int) end, 40);
+    check (layout (p->getProgression()).endsWith ("block_chords[C:4 G:4 Am:4 F:4]") && p->undoState().undoLabel == "Import MIDI"
+               && selText (t.selection()) == "S3",
+           "block_chords.mid dropped past the end: a section of its chords, one undo step, selected");
+    check (editor->infoView().shownKey() == "display.import" && editor->infoView().shownText().startsWith ("block_chords.mid: 4 chords in 1 section"),
+           "the Info View says what came in (" + editor->infoView().shownText() + ")");
+
+    // Its markers make sections; dropped into the Verse (after its first chord) the chords join it.
+    p->undoProgression();
+    editor->refreshNow();
+    const auto into = t.chordBounds ({ 0, 1 }).getX() + 2.0f;
+    check (t.importFile (dir.getChildFile ("sections.mid"), into) && layout (p->getProgression()).startsWith ("Verse[C:4 C:4 G:4 F:4 G:4 Am:4"),
+           "sections.mid dropped inside the Verse: its four chords go in there (" + layout (p->getProgression()).substring (0, 40) + ")");
+    p->undoProgression();
+    editor->refreshNow();
+    check (t.importFile (dir.getChildFile ("sections.mid"), end) && layout (p->getProgression()).endsWith ("Verse[C:4 G:4] Chorus[F:4 G:4]"),
+           "…and past the end: its two marked sections, Verse and Chorus");
+
+    // A melody only: nothing for the timeline, and the Info View says to use Match.
+    const auto before = p->getProgression();
+    check (! t.importFile (dir.getChildFile ("melody_only.mid"), end) && p->getProgression() == before
+               && editor->infoView().shownText().contains ("has no chords"),
+           "melody_only.mid on the timeline: no chords, nothing changes, a hint to drop it on Match");
+    check (! t.importFile (dir.getChildFile ("not_midi.mid"), end) && editor->infoView().shownText().contains ("not a MIDI file"), "a text file: says so");
+
+    // On Match: the melody is the note set.
+    editor->showMatch (true);
+    auto& match = editor->getMatch();
+    check (match.isInterestedInFileDrag ({ dir.getChildFile ("melody_only.mid").getFullPathName() }), "Match takes .mid files too");
+    match.filesDropped ({ dir.getChildFile ("chords_melody.mid").getFullPathName() }, 10, 10);
+    editor->refreshNow();
+    check (match.importedName() == "chords_melody.mid" && match.noteSet().weight[0] == 5.0 && ! match.getMatches().empty()
+               && match.getMatches().front().cell.name == "Am",
+           "chords_melody.mid on Match: its melody (not its chords) is matched: Am first (" + juce::String (match.getMatches().empty() ? "-" : match.getMatches().front().cell.name) + ")");
+    match.picker.setPicked ((1u << 0) | (1u << 4) | (1u << 7));
+    check (match.getMatches().front().cell.name == "C", "picked notes still win over the file");
+    match.clear.onClick();
+    editor->refreshNow();
+    check (match.importedName().isEmpty() && match.noteSet().empty(), "Clear forgets the file");
+    editor->showMatch (false);
+    closeEditor (*p, editor);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -1481,6 +1547,7 @@ int main (int argc, char** argv)
     testRelations (fixtures, out, update);
     testTemplates();
     testHardening();
+    testImport();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;

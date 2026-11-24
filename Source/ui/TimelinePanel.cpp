@@ -1026,6 +1026,90 @@ namespace chordzimmer::ui
     }
 
     //==========================================================================
+    // A .mid dropped in (Phase 9).
+
+    static bool isMidiFile (const juce::String& path)
+    {
+        return path.endsWithIgnoreCase (".mid") || path.endsWithIgnoreCase (".midi") || path.endsWithIgnoreCase (".smf");
+    }
+
+    bool TimelinePanel::isInterestedInFileDrag (const juce::StringArray& files)
+    {
+        for (const auto& f : files)
+            if (isMidiFile (f))
+                return true;
+        return false;
+    }
+
+    void TimelinePanel::fileDragEnter (const juce::StringArray& files, int x, int y) { fileDragMove (files, x, y); }
+
+    void TimelinePanel::fileDragMove (const juce::StringArray&, int x, int)
+    {
+        dropping = true;
+        dropAt = dropPoint (layout(), (double) x);
+        repaint();
+    }
+
+    void TimelinePanel::fileDragExit (const juce::StringArray&)
+    {
+        dropping = false;
+        repaint();
+    }
+
+    void TimelinePanel::filesDropped (const juce::StringArray& files, int x, int)
+    {
+        dropping = false;
+        for (const auto& f : files)
+            if (isMidiFile (f))
+            {
+                importFile (juce::File (f), (float) x);
+                break;
+            }
+        repaint();
+    }
+
+    bool TimelinePanel::importFile (const juce::File& file, float x)
+    {
+        juce::MemoryBlock data;
+        const auto say = [this] (const juce::String& s) { if (onImport) onImport (s); };
+        if (! file.loadFileAsData (data))
+        {
+            say ("Couldn't read " + file.getFileName() + ".");
+            return false;
+        }
+        const auto imported = importMidiFile ((const uint8_t*) data.getData(), data.getSize(), homeKey, homeScale,
+                                              file.getFileNameWithoutExtension().toStdString());
+        if (! imported.ok())
+        {
+            say (file.getFileName() + ": " + juce::String (imported.error) + ".");
+            return false;
+        }
+        if (imported.chords.empty())
+        {
+            say (file.getFileName() + " has no chords (" + juce::String (imported.numNotes)
+                 + " notes). To match chords to a melody, drop it on Match.");
+            return false;
+        }
+        const InsertPoint at = dropPoint (layout(), x);
+        ProgressionClip clip;
+        clip.parts = imported.chords.sections;
+        const bool did = edit ("Import MIDI", [&] (ChordProgression& q, Selection& sel)
+        {
+            // Into a section, the chords join it; elsewhere each of the file's sections is one.
+            return q.insert (at, clip, &sel);
+        });
+        if (! did)
+        {
+            say ("No room for " + file.getFileName() + "'s " + juce::String (imported.chords.numChords()) + " chords (256 at most).");
+            return false;
+        }
+        say (file.getFileName() + ": " + juce::String (imported.chords.numChords()) + " chords in "
+             + juce::String (imported.chords.numSections()) + (imported.chords.numSections() == 1 ? " section" : " sections")
+             + (imported.droppedChords > 0 ? ", " + juce::String (imported.droppedChords) + " left out (too many)" : juce::String()) + ".");
+        return true;
+    }
+
+    //==========================================================================
     // Drops from the palette.
 
     bool TimelinePanel::isInterestedInDragSource (const SourceDetails& d)

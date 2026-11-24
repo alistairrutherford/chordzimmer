@@ -27,6 +27,7 @@
 
 #include "Keyboards.h"
 #include "Theme.h"
+#include "../core/midiio/MidiImport.h"
 #include "../core/model/Relations.h"
 #include "../core/model/TimelineLayout.h"
 
@@ -58,6 +59,7 @@ namespace chordzimmer::ui
 
     class TimelinePanel : public juce::Component,
                           public juce::DragAndDropTarget,
+                          public juce::FileDragAndDropTarget,
                           public juce::SettableTooltipClient,
                           private juce::ScrollBar::Listener
     {
@@ -130,6 +132,18 @@ namespace chordzimmer::ui
         void mouseExit (const juce::MouseEvent&) override;
         void mouseDoubleClick (const juce::MouseEvent&) override;
         void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+
+        // A .mid dropped from the Finder or the host (PLAN.md §6 Phase 9, MidiImport.h): its
+        // chords go in where it lands, as sections (its markers', else one named after the file),
+        // one undo step. importFile does the same for a file at x (the tests); onImport says what
+        // came in, or why nothing did, for the Info View.
+        bool importFile (const juce::File&, float x);
+        std::function<void (const juce::String&)> onImport;
+        bool isInterestedInFileDrag (const juce::StringArray& files) override;
+        void fileDragEnter (const juce::StringArray&, int x, int y) override;
+        void fileDragMove (const juce::StringArray&, int x, int y) override;
+        void fileDragExit (const juce::StringArray&) override;
+        void filesDropped (const juce::StringArray& files, int x, int y) override;
 
         bool isInterestedInDragSource (const SourceDetails&) override;
         void itemDragEnter (const SourceDetails&) override;
