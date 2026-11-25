@@ -25,6 +25,7 @@
 // 30 Hz from the processor's published state.
 #pragma once
 
+#include "../core/theory/Follow.h"
 #include "InfoView.h"
 #include "MatchPanel.h"
 #include "NavigatorBar.h"
@@ -94,6 +95,10 @@ namespace chordzimmer
         void updateMatch();
         void placeMatch();
         void setFocus (const ChordId&, const std::string& numeral);   // Chord Relations' focus (Phase 6)
+        void follow (unsigned& pitchClasses, int& root);              // Follow (1.2): bring it on screen
+
+        struct Followed { unsigned pcs = 0; int root = -1; FollowSpot spot; };
+        Followed followed;                 // the chord Follow last brought on screen
 
         ChordZimmerProcessor& processor;
         ui::LookAndFeel lookAndFeel;

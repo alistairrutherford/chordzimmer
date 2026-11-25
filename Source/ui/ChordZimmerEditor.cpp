@@ -6,7 +6,8 @@ namespace chordzimmer
     namespace
     {
         const juce::Identifier keyboardId ("keyboard"), widthId ("width"), heightId ("height"),
-                               paletteFifthsId ("paletteFifths"), paletteScaleId ("paletteScale"), snapId ("snap"), zoomId ("zoom");
+                               paletteFifthsId ("paletteFifths"), paletteScaleId ("paletteScale"), snapId ("snap"), zoomId ("zoom"),
+                               followId ("follow");
     }
 
     ChordZimmerEditor::ChordZimmerEditor (ChordZimmerProcessor& p)
@@ -39,6 +40,13 @@ namespace chordzimmer
         nav.paletteScale = savedScale >= 0 && savedScale < numScales ? (Scale) savedScale : settings.scale;
         navigator.refresh();
         palette.setContext ({ nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale, nav.distance() });
+
+        palette.followBox.setToggleState ((bool) ui.getProperty (followId, false), juce::dontSendNotification);
+        palette.onFollow = [this] (bool on)
+        {
+            processor.uiState.setProperty (followId, on, nullptr);
+            followed = {};
+        };
 
         const int snap = ui.getProperty (snapId, (int) defaultSnap);
         transport.setSnap ((Snap) juce::jlimit (0, (int) Snap::Bar, snap));
@@ -399,6 +407,63 @@ namespace chordzimmer
         }
 
         const auto* sounding = prog.chord (chordAtOrder (prog, m.playingChord));
-        palette.setSounding (sounding != nullptr ? sounding->pitchClasses() : 0u, sounding != nullptr ? sounding->root() : -1, m.playhead);
+        unsigned pcs = sounding != nullptr ? sounding->pitchClasses() : 0u;
+        int root = sounding != nullptr ? sounding->root() : -1;
+        if (palette.following())
+            follow (pcs, root);
+        palette.setSounding (pcs, root, m.playhead);
+    }
+
+    // Follow (1.2, Follow.h): the chord playing (the timeline's, else the notes sounding from a
+    // keyboard: three pitch classes or more) brought on screen once each time it changes, so ◀ ▶
+    // and the scroll stay yours while it holds. The cell found is the one lit, so a chord no
+    // palette has lights the nearest one on its root.
+    void ChordZimmerEditor::follow (unsigned& pcs, int& root)
+    {
+        if (pcs == 0)
+        {
+            unsigned heard = 0;
+            int lowest = -1;
+            for (int n = 0; n < 128; ++n)
+                if (processor.isNoteSounding (n))
+                {
+                    heard |= 1u << (n % 12);
+                    if (lowest < 0)
+                        lowest = n;
+                }
+            int count = 0;
+            for (unsigned m = heard; m != 0; m &= m - 1)
+                ++count;
+            if (count >= 3)
+            {
+                pcs = heard;
+                root = nameChord (heard, lowest % 12, makeSpelling (nav.homeKey, nav.homeScale)).root;
+            }
+        }
+        if (pcs == 0 || root < 0)
+        {
+            followed = {};                // nothing playing: the next chord is followed, even the same one
+            return;
+        }
+        if (pcs != followed.pcs || root != followed.root)
+        {
+            followed = { pcs, root, followSpot (pcs, root, nav) };
+            const auto& spot = followed.spot;
+            if (spot.found)
+            {
+                if (spot.fifths != nav.fifths)
+                {
+                    nav.fifths = spot.fifths;
+                    navigator.refresh();
+                    paletteMoved();
+                }
+                palette.showRow (spot.variant);
+            }
+        }
+        if (followed.spot.found)
+        {
+            pcs = followed.spot.pitchClasses;
+            root = followed.spot.root;
+        }
     }
 }

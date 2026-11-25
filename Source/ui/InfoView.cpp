@@ -35,6 +35,7 @@ namespace chordzimmer::ui
             // ---- The timeline ----------------------------------------------------------------
             { "ui.dragSelection", "Drag MIDI",
               "Drag into a track: the selected chords or sections (nothing selected: all) as a MIDI clip, section names as markers. Alt: no strum." },
+            { "ui.follow", "Follow", "While ticked, the chord playing (the timeline's, or a keyboard's) is brought into view: the palette scrolls to it, and steps to its key if it's borrowed." },
             { "ui.importMidi", "Import MIDI", "Opens a .mid file: its chords go in at the insertion marker (its markers become sections). Or drop the file here." },
             { "ui.matchOpen", "Open .mid", "Opens a .mid file: its melody (the notes outside its chords) is what's matched, until Clear." },
             { "display.import", "MIDI file", "Drop a .mid on the timeline for its chords (its markers become sections), or on Match for its melody." },

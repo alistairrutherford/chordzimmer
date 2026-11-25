@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="CzimPj" name="ChordZimmer" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="1.1.0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="1.2.0"
               companyName="Alistair Rutherford" companyWebsite="https://github.com/alistairrutherford/chordzimmer"
               bundleIdentifier="com.alistairrutherford.chordzimmer"
               pluginFormats="buildVST3,buildStandalone" pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn,pluginProducesMidiOut"
@@ -25,6 +25,7 @@
         <FILE id="czF102" name="PaletteBuilder.h" compile="0" resource="0" file="Source/core/theory/PaletteBuilder.h"/>
         <FILE id="czF103" name="CircleOfFifths.h" compile="0" resource="0" file="Source/core/theory/CircleOfFifths.h"/>
         <FILE id="czF104" name="Matcher.h" compile="0" resource="0" file="Source/core/theory/Matcher.h"/>
+        <FILE id="czF105" name="Follow.h" compile="0" resource="0" file="Source/core/theory/Follow.h"/>
       </GROUP>
       <GROUP id="csGrp1" name="core/engine">
         <FILE id="ccF101" name="ChordEngine.h" compile="0" resource="0" file="Source/core/engine/ChordEngine.h"/>

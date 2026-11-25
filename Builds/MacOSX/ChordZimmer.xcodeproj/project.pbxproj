@@ -222,6 +222,7 @@
 		EABC486C6E1A96A0F6CFB263 /* Transport.h */ /* Transport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Transport.h; path = ../../Source/core/engine/Transport.h; sourceTree = SOURCE_ROOT; };
 		EB6C7E233ACABB3E636E05ED /* ChordZimmerEditor.h */ /* ChordZimmerEditor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChordZimmerEditor.h; path = ../../Source/ui/ChordZimmerEditor.h; sourceTree = SOURCE_ROOT; };
 		EC5AD9C37DCD723D1F57BA9B /* PresetBar.cpp */ /* PresetBar.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PresetBar.cpp; path = ../../Source/ui/PresetBar.cpp; sourceTree = SOURCE_ROOT; };
+		EEDDF8F54D018A3CE1D37948 /* Follow.h */ /* Follow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Follow.h; path = ../../Source/core/theory/Follow.h; sourceTree = SOURCE_ROOT; };
 		F3DF6BBA529BBCF8563DFEE0 /* SpaceGrotesk-Bold.ttf */ /* SpaceGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; name = "SpaceGrotesk-Bold.ttf"; path = "../../Resources/Fonts/SpaceGrotesk-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		F8499C90215F175CC833F8B6 /* Hold.h */ /* Hold.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Hold.h; path = ../../Source/core/engine/Hold.h; sourceTree = SOURCE_ROOT; };
 		F8E1AD18F3BFF6BBAD9C6276 /* Parameters.h */ /* Parameters.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Parameters.h; path = ../../Source/plugin/Parameters.h; sourceTree = SOURCE_ROOT; };
@@ -480,6 +481,7 @@
 				360B5C304EAA15A4CAB209AA,
 				1E9D51F525985A04526EABF0,
 				2ACE6D29C1D3AD8945286E03,
+				EEDDF8F54D018A3CE1D37948,
 			);
 			name = core/theory;
 			sourceTree = "<group>";
@@ -1026,9 +1028,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1052,12 +1054,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				HEADER_SEARCH_PATHS = (
@@ -1142,9 +1144,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1168,12 +1170,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 					"JUCE_SHARED_CODE=1",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
@@ -1260,9 +1262,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1286,12 +1288,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				HEADER_SEARCH_PATHS = (
@@ -1426,9 +1428,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1452,12 +1454,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				GENERATE_PKGINFO_FILE = YES;
@@ -1546,9 +1548,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1572,12 +1574,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				HEADER_SEARCH_PATHS = (
@@ -1661,9 +1663,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1687,12 +1689,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				GENERATE_PKGINFO_FILE = YES;
@@ -1837,9 +1839,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1863,12 +1865,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 					"JUCE_SHARED_CODE=1",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
@@ -1954,9 +1956,9 @@
 					"JucePlugin_ProducesMidiOutput=1",
 					"JucePlugin_IsMidiEffect=0",
 					"JucePlugin_EditorRequiresKeyboardFocus=0",
-					"JucePlugin_Version=1.1.0",
-					"JucePlugin_VersionCode=0x10100",
-					"JucePlugin_VersionString=\\\"1.1.0\\\"",
+					"JucePlugin_Version=1.2.0",
+					"JucePlugin_VersionCode=0x10200",
+					"JucePlugin_VersionString=\\\"1.2.0\\\"",
 					"JucePlugin_VSTUniqueID=JucePlugin_PluginCode",
 					"JucePlugin_VSTCategory=kPlugCategSynth",
 					"JucePlugin_Vst3Category=\\\"Instrument|Tools\\\"",
@@ -1980,12 +1982,12 @@
 					"JucePlugin_ARAContentTypes=0",
 					"JucePlugin_ARATransformationFlags=0",
 					"JucePlugin_ARAFactoryID=\\\"com.AlistairRutherford.ChordZimmer.factory\\\"",
-					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.1.0\\\"",
+					"JucePlugin_ARADocumentArchiveID=\\\"com.AlistairRutherford.ChordZimmer.aradocumentarchive.1.2.0\\\"",
 					"JucePlugin_ARACompatibleArchiveIDs=\\\"\\\"",
 					"JUCE_STANDALONE_APPLICATION=JucePlugin_Build_Standalone",
 					"JUCER_XCODE_MAC_F6D2F4CF=1",
-					"JUCE_APP_VERSION=1.1.0",
-					"JUCE_APP_VERSION_HEX=0x10100",
+					"JUCE_APP_VERSION=1.2.0",
+					"JUCE_APP_VERSION_HEX=0x10200",
 				);
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				HEADER_SEARCH_PATHS = (

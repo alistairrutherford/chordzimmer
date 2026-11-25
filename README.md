@@ -7,7 +7,7 @@ key; **borrowing** around the circle of fifths and from parallel modes; a sectio
 MIDI clips. It makes no sound itself: it sends MIDI to an instrument on another track.
 It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PLAN.md](PLAN.md).
 
-**Version 1.1.0** (2026-11-25: MIDI import tuned on real files, after 1.0.0 finished PLAN.md's phases). What changed:
+**Version 1.2.0** (2026-11-25: Follow; 1.1.0 tuned the MIDI import on real files; 1.0.0 finished PLAN.md's phases). What changed:
 [CHANGELOG.md](CHANGELOG.md).
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
@@ -33,6 +33,10 @@ It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PL
 - **Relations** (the palette's title row): for the chord last chosen, each palette chord's
   function (V/vi, IV, rel, sub), notes in common and voice-leading distance, and **Next ▸**, five
   usual follow-ups.
+- **Follow** (the palette's title row, a tick box): the chord playing, from the timeline or a
+  keyboard, is brought into view: the palette scrolls to its row, and steps round the circle of
+  fifths to its key when it's borrowed. Once each time the chord changes, so ◀ ▶ stay yours
+  while it holds; a chord no palette has lights the nearest one on its root.
 - **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with the
   section names as markers. And the other way: **Import MIDI…** (beside it) opens a `.mid` and puts
   its chords in at the insertion marker (its markers become sections; drum parts are left out, on

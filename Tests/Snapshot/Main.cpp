@@ -1541,6 +1541,85 @@ static void testImport()
     closeEditor (*p, editor);
 }
 
+// Follow (1.2): the palette brings the playing chord on screen, stepping round the circle of
+// fifths for a borrowed one; once per change; saved with the plug-in; keyboard chords too.
+static void testFollow()
+{
+    std::cout << "== Follow ==\n";
+    auto p = std::make_unique<ChordZimmerProcessor>();
+    p->prepareToPlay (48000.0, 512);
+    block (*p);
+    p->setProgression (song());
+    auto editor = openEditor (*p);
+    editor->setSize (ChordZimmerEditor::defaultWidth, ChordZimmerEditor::defaultHeight);
+    editor->refreshNow();
+    auto& palette = editor->getPalette();
+    const auto& state = editor->getNavigatorState();
+    const auto inView = [&] (int variant) { return variant >= palette.firstRow() && variant < palette.firstRow() + palette.visibleRows(); };
+
+    // Off (the default): the Bridge's bVI (Ab) plays, the palette stays in C.
+    check (! palette.following(), "Follow is off at first");
+    p->playhead = 33.0;
+    p->playingChord = 10;
+    editor->refreshNow();
+    check (state.fifths == 0, "off: the Bridge's Ab plays, the palette stays at home");
+
+    // On: Ab is the IV of Eb major, three fifths down.
+    palette.followBox.setToggleState (true, juce::sendNotification);
+    editor->refreshNow();
+    const auto ab = followSpot ((1u << 8) | (1u << 0) | (1u << 3), 8, state);
+    check (state.fifths == -3 && ab.exact && inView (ab.variant) && (bool) p->uiState.getProperty ("follow", false),
+           "on: the palette steps to Eb major (-3), Ab's row in view; saved (" + juce::String (state.fifths) + ")");
+    const auto& cell = palette.getGrid().rows[(size_t) ab.variant].cells[(size_t) ab.degree];
+    check (cell.exists && cell.name == "Ab", "the cell there is Ab");
+
+    // Once per change: the palette moved by hand stays while the same chord plays.
+    editor->getNavigator().goHome();
+    editor->refreshNow();
+    check (state.fifths == 0, "moved home by hand while the Ab still plays: it stays home");
+
+    // The Chorus's ii7 (Dm7): in C major, the 7th row brought into view.
+    palette.scrollRows (-20);
+    p->playingChord = 8;
+    editor->refreshNow();
+    const auto dm7 = followSpot ((1u << 2) | (1u << 5) | (1u << 9) | (1u << 0), 2, state);
+    check (state.fifths == 0 && dm7.exact && inView (dm7.variant), "the Chorus's Dm7: here in C, its row scrolled into view");
+
+    // Stopped, then the same chord again: followed again.
+    p->playingChord = 10;
+    editor->refreshNow();
+    check (state.fifths == -3, "the Ab again (after the Dm7): back to Eb major");
+    editor->getNavigator().goHome();
+    p->playhead = -1.0;
+    p->playingChord = -1;
+    editor->refreshNow();
+    p->playhead = 33.0;
+    p->playingChord = 10;
+    editor->refreshNow();
+    check (state.fifths == -3, "stopped, then the same Ab: followed again");
+    p->playhead = -1.0;
+    p->playingChord = -1;
+    editor->getNavigator().goHome();
+    editor->refreshNow();
+
+    // A keyboard: Bb D F held (the on-screen keyboard) sounds Bb; F major (-1) holds it.
+    for (int n : { 58, 62, 65 })
+        p->pushUiNote (n, 100, true);
+    block (*p);
+    editor->refreshNow();
+    check (state.fifths == -1, "Bb D F played on the keyboard: the palette steps to F major (-1) (" + juce::String (state.fifths) + ")");
+    for (int n : { 58, 62, 65 })
+        p->pushUiNote (n, 0, false);
+    block (*p);
+    editor->refreshNow();
+
+    // Saved with the plug-in: a new editor opens ticked.
+    editor.reset();
+    auto again = openEditor (*p);
+    again->refreshNow();
+    check (again->getPalette().following(), "a new editor opens with Follow ticked");
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -1571,6 +1650,7 @@ int main (int argc, char** argv)
     testTemplates();
     testHardening();
     testImport();
+    testFollow();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed\n" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)\n");
     return failures == 0 ? 0 : 1;

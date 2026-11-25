@@ -179,6 +179,36 @@ namespace chordzimmer::ui
         return LookAndFeel_V4::getTypefaceForFont (f);
     }
 
+    // A tick box (Follow, 1.2): a rounded square, amber with a dark tick when on; the label after it.
+    void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool down)
+    {
+        const float alpha = b.isEnabled() ? 1.0f : 0.4f;
+        const auto r = b.getLocalBounds().toFloat();
+        const float side = juce::jmin (14.0f, r.getHeight() - 4.0f);
+        const juce::Rectangle<float> box (r.getX() + 1.0f, r.getCentreY() - side * 0.5f, side, side);
+        if (b.getToggleState())
+        {
+            g.setColour ((down ? night::accent.brighter (0.12f) : night::accent).withMultipliedAlpha (alpha));
+            g.fillRoundedRectangle (box, 3.5f);
+            juce::Path tick;
+            tick.startNewSubPath (box.getX() + side * 0.25f, box.getCentreY());
+            tick.lineTo (box.getX() + side * 0.43f, box.getBottom() - side * 0.27f);
+            tick.lineTo (box.getRight() - side * 0.22f, box.getY() + side * 0.28f);
+            g.setColour (night::bgTop.withMultipliedAlpha (alpha));
+            g.strokePath (tick, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+        else
+        {
+            g.setColour (colours::raised.withMultipliedAlpha (alpha));
+            g.fillRoundedRectangle (box, 3.5f);
+            g.setColour ((highlighted ? night::accent.withAlpha (0.55f) : colours::faint).withMultipliedAlpha (alpha));
+            g.drawRoundedRectangle (box.reduced (0.5f), 3.5f, 1.0f);
+        }
+        g.setColour ((b.getToggleState() || highlighted ? colours::text : colours::dim).withMultipliedAlpha (alpha));
+        g.setFont (font (12.5f, true));
+        g.drawText (b.getButtonText(), r.withTrimmedLeft (side + 7.0f), juce::Justification::centredLeft, false);
+    }
+
     void LookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour& base, bool highlighted, bool down)
     {
         auto r = b.getLocalBounds().toFloat().reduced (0.5f);

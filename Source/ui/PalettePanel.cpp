@@ -93,6 +93,9 @@ namespace chordzimmer::ui
         relationsButton.setClickingTogglesState (true);
         relationsButton.onClick = [this] { showRelations (relationsButton.getToggleState()); };
         addAndMakeVisible (relationsButton);
+        followBox.setComponentID ("ui.follow");
+        followBox.onClick = [this] { if (onFollow) onFollow (followBox.getToggleState()); };
+        addAndMakeVisible (followBox);
         next.onPreview = [this] (const ProgressionChord& c) { processor.previewChord (c); };
         next.onEndPreview = [this] { processor.endPreview(); };
         next.onAdd = [this] (const ProgressionChord& c) { if (onAdd) onAdd (c); };
@@ -269,7 +272,8 @@ namespace chordzimmer::ui
     {
         const auto title = getLocalBounds().reduced (padding).removeFromTop (titleHeight);
         relationsButton.setBounds (title.withX (title.getX() + 70).withWidth (78).reduced (0, 1));
-        next.setBounds (title.withX (title.getX() + 160).withWidth (juce::jmax (0, juce::jmin (380, title.getWidth() - 160 - 210))).reduced (0, 1));
+        followBox.setBounds (title.withX (title.getX() + 158).withWidth (70));
+        next.setBounds (title.withX (title.getX() + 236).withWidth (juce::jmax (0, juce::jmin (380, title.getWidth() - 236 - 210))).reduced (0, 1));
         scrollRows (0);   // keep the rows within range at the new height
     }
 

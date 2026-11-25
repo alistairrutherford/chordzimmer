@@ -84,6 +84,10 @@ namespace chordzimmer::ui
         const Relation& relationOf (int variant, int degree) const noexcept { return relations[(size_t) variant][(size_t) degree]; }
         std::function<void (const PaletteCell&)> onFocus;   // a cell was clicked
         juce::TextButton relationsButton { "Relations" };
+        // Follow (1.2): the editor brings the chord that's playing on screen while it's ticked.
+        juce::ToggleButton followBox { "Follow" };
+        bool following() const noexcept { return followBox.getToggleState(); }
+        std::function<void (bool)> onFollow;
         NextStrip next;
 
         // Rows: `firstRow` is the bottom one shown (a variant index, 0 = "5").

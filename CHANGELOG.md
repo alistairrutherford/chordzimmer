@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 (2026-11-25): Follow
+
+- **Follow**, a tick box in the palette's title row (saved with the plug-in, off at first):
+  the chord playing is brought into view. It's the timeline's chord while it plays, else the
+  notes sounding from a keyboard (a MIDI keyboard, keys playing chords, the on-screen keys;
+  three pitch classes or more). The palette scrolls to its row and, when it's borrowed, steps
+  round the circle of fifths (nearest first, keeping its mode) to the key that holds it. A
+  chord no palette has lights the nearest cell on its root with the same 3rd, in the nearest
+  palette that has one. It acts once each time the chord changes, so ◀ ▶ and the scroll stay
+  yours while a chord holds.
+- `core/theory/Follow.h` (`followSpot`, `followOrder`) and `test_follow`; the snapshot test
+  plays a borrowed chord, a 7th chord out of view and a keyboard chord with Follow on.
+- A tick box in the Night Studio style (`LookAndFeel::drawToggleButton`).
+
 ## 1.1.0 (2026-11-25): MIDI import on real files
 
 Found by running 71 real files through the import (`Tools/import_report.cpp`): Ableton's

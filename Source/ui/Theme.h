@@ -109,6 +109,7 @@ namespace chordzimmer::ui
         juce::Typeface::Ptr getTypefaceForFont (const juce::Font&) override;
         void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
         void drawButtonText (juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
+        void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;   // a tick box
         void drawComboBox (juce::Graphics&, int width, int height, bool down, int bx, int by, int bw, int bh, juce::ComboBox&) override;
         juce::Font getComboBoxFont (juce::ComboBox&) override { return font (13.0f); }
         static constexpr int comboArrowWidth = 20, comboTextInset = 3;   // a combo box's text has its width less these
