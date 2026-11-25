@@ -16,6 +16,9 @@
 //               and the palette's double-click go to it); a palette chord dropped there makes a
 //               new section
 //
+// Import MIDI… (Phase 9), beside it: a .mid's chords at the insertion marker, through a file
+// chooser (or drop the file on the timeline, where the host lets drops through).
+//
 // Drag MIDI (PLAN.md §3.7, Phase 7), at the right of the title row: drag it into a track (or the
 // Finder) for the selection as a MIDI clip, everything when nothing is selected, with section
 // names as markers; Alt for the chords without strum.
@@ -138,7 +141,16 @@ namespace chordzimmer::ui
         // one undo step. importFile does the same for a file at x (the tests); onImport says what
         // came in, or why nothing did, for the Info View.
         bool importFile (const juce::File&, float x);
+        bool importFileAt (const juce::File&, InsertPoint);
         std::function<void (const juce::String&)> onImport;
+
+        // Import MIDI… (the title row's button, the empty space's menu): a file chooser, then
+        // the file's chords at the insertion marker. Drops don't reach a plug-in window in Live
+        // (it keeps clip drags, and hides the window while the Finder is in front), so this is
+        // the way in there. `chooseFile` asks for the file (the system's dialog; tests replace it).
+        void chooseAndImport();
+        std::function<void (std::function<void (const juce::File&)>)> chooseFile;
+        juce::TextButton importButton { juce::String::fromUTF8 ("Import MIDI\xe2\x80\xa6") };
         bool isInterestedInFileDrag (const juce::StringArray& files) override;
         void fileDragEnter (const juce::StringArray&, int x, int y) override;
         void fileDragMove (const juce::StringArray&, int x, int y) override;
@@ -208,6 +220,7 @@ namespace chordzimmer::ui
         int renaming = -1;
 
         static constexpr int padding = 10, titleHeight = 22, rulerHeight = 14, tabHeight = 20, scrollHeight = 8;
-        static constexpr int dragHandleWidth = 200;
+        static constexpr int dragHandleWidth = 200, importButtonWidth = 96;
+        std::unique_ptr<juce::FileChooser> chooser;
     };
 }

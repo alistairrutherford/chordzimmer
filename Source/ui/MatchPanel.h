@@ -81,6 +81,11 @@ namespace chordzimmer::ui
         // A .mid dropped on the popover (PLAN.md §6 Phase 9): its melody (the notes outside its
         // chords, MidiImport.h) is the note set, until Clear (picked notes still win).
         bool importFile (const juce::File&);
+        // Open .mid… (Phase 9): the same through a file chooser, which works in Live, where
+        // drops don't reach a plug-in window. `chooseFile` asks for it (tests replace it).
+        void chooseAndImport();
+        std::function<void (std::function<void (const juce::File&)>)> chooseFile;
+        juce::TextButton openFile { juce::String::fromUTF8 ("Open .mid\xe2\x80\xa6") };
         const juce::String& importedName() const noexcept { return importedFrom; }
         bool isInterestedInFileDrag (const juce::StringArray& files) override;
         void fileDragEnter (const juce::StringArray&, int, int) override;
@@ -114,6 +119,8 @@ namespace chordzimmer::ui
         NoteSet heard, notes, imported;
         juce::String importedFrom;
         bool fileOver = false;
+        std::unique_ptr<juce::FileChooser> chooser;
+        juce::Rectangle<int> importedArea;
         std::vector<ChordMatch> matches;
         juce::String name, setTarget;
 

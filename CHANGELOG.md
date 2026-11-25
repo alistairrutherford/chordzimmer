@@ -11,6 +11,9 @@ PLAN.md §6, Phase 9 (the optional one).
   back as it was), else one section named after the file. The Info View says what came in.
 - **Drop a .mid on Match:** its melody (the notes outside its chords) is what's matched, until
   Clear; picked notes still win.
+- **Import MIDI…** (the timeline's title row, and its empty space's menu) and **Open .mid…**
+  (Match) do the same through a file chooser: in Live, drops don't reach the plug-in window
+  (Live keeps a clip's drag to itself, and hides the window while the Finder is in front).
 - Tests: `test_import` on nine fixture files written by `Tools/gen_import_fixtures.py`; the
   snapshot test drops files on the timeline and on Match.
 

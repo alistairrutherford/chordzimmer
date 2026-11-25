@@ -114,6 +114,19 @@ namespace chordzimmer::ui
     TimelinePanel::TimelinePanel (ChordZimmerProcessor& p, Bindings& b) : dragHandle (p), processor (p), bindings (b)
     {
         addAndMakeVisible (dragHandle);
+        importButton.setComponentID ("ui.importMidi");
+        importButton.onClick = [this] { chooseAndImport(); };
+        addAndMakeVisible (importButton);
+        chooseFile = [this] (std::function<void (const juce::File&)> then)
+        {
+            chooser = std::make_unique<juce::FileChooser> ("Import a MIDI file", juce::File(), "*.mid;*.midi;*.smf");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [then] (const juce::FileChooser& fc)
+                                  {
+                                      if (fc.getResult().existsAsFile())
+                                          then (fc.getResult());
+                                  });
+        };
         setComponentID ("display.timeline");
         setWantsKeyboardFocus (true);
         scrollBar.setAutoHide (true);
@@ -516,7 +529,10 @@ namespace chordzimmer::ui
     {
         const auto r = getLocalBounds().reduced (padding);
         scrollBar.setBounds (r.withTop (r.getBottom() - scrollHeight));
-        dragHandle.setBounds (r.withHeight (titleHeight).removeFromRight (dragHandleWidth).reduced (0, 1).translated (0, -2));
+        auto titleRow = r.withHeight (titleHeight);
+        dragHandle.setBounds (titleRow.removeFromRight (dragHandleWidth).reduced (0, 1).translated (0, -2));
+        titleRow.removeFromRight (6);
+        importButton.setBounds (titleRow.removeFromRight (importButtonWidth).reduced (0, 1).translated (0, -2));
         updateScrollBar();
         if (renaming >= 0)
             startRenaming (renaming);
@@ -541,7 +557,7 @@ namespace chordzimmer::ui
             g.setFont (font (11.0f));
             g.drawText (juce::String (prog.numSections()) + (prog.numSections() == 1 ? " section, " : " sections, ") + juce::String (prog.numChords())
                             + (prog.numChords() == 1 ? " chord, " : " chords, ") + lengthText (prog.totalTicks(), beatsPerBar),
-                        getLocalBounds().reduced (padding).removeFromTop (titleHeight).withTrimmedRight (dragHandleWidth + 10), juce::Justification::centredRight);
+                        getLocalBounds().reduced (padding).removeFromTop (titleHeight).withTrimmedRight (dragHandleWidth + importButtonWidth + 16), juce::Justification::centredRight);
         }
 
         const auto ruler = rulerArea(), tabs = tabArea(), chords = chordArea();
@@ -1022,6 +1038,7 @@ namespace chordzimmer::ui
         juce::Component::SafePointer<TimelinePanel> self (this);
         juce::PopupMenu menu;
         menu.addItem ("Paste here", ! clipboard.empty(), false, [self] { if (self) self->paste(); });
+        menu.addItem (juce::String::fromUTF8 ("Import MIDI here\xe2\x80\xa6"), [self] { if (self) self->chooseAndImport(); });
         menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition());
     }
 
@@ -1068,7 +1085,21 @@ namespace chordzimmer::ui
         repaint();
     }
 
+    void TimelinePanel::chooseAndImport()
+    {
+        if (! chooseFile)
+            return;
+        juce::Component::SafePointer<TimelinePanel> self (this);
+        const InsertPoint at = insertAt;
+        chooseFile ([self, at] (const juce::File& f) { if (self != nullptr) self->importFileAt (f, at); });
+    }
+
     bool TimelinePanel::importFile (const juce::File& file, float x)
+    {
+        return importFileAt (file, dropPoint (layout(), x));
+    }
+
+    bool TimelinePanel::importFileAt (const juce::File& file, InsertPoint at)
     {
         juce::MemoryBlock data;
         const auto say = [this] (const juce::String& s) { if (onImport) onImport (s); };
@@ -1090,7 +1121,7 @@ namespace chordzimmer::ui
                  + " notes). To match chords to a melody, drop it on Match.");
             return false;
         }
-        const InsertPoint at = dropPoint (layout(), x);
+        at = clampInsertPoint (model, at);
         ProgressionClip clip;
         clip.parts = imported.chords.sections;
         const bool did = edit ("Import MIDI", [&] (ChordProgression& q, Selection& sel)

@@ -1514,6 +1514,19 @@ static void testImport()
     match.clear.onClick();
     editor->refreshNow();
     check (match.importedName().isEmpty() && match.noteSet().empty(), "Clear forgets the file");
+    // Import MIDI… and Open .mid… (the file chooser replaced): at the marker; on Match.
+    p->setProgression (song());
+    editor->refreshNow();
+    t.setSelection (Selection::chord (0, 0));    // the marker after the Verse's C
+    t.chooseFile = [dir] (std::function<void (const juce::File&)> then) { then (dir.getChildFile ("block_chords.mid")); };
+    t.importButton.onClick();
+    check (layout (p->getProgression()).startsWith ("Verse[C:4 C:4 G:4 Am:4 F:4 Am:4") && p->undoState().undoLabel == "Import MIDI",
+           "Import MIDI… (block_chords.mid chosen): its chords go in at the marker, after the Verse's C (" + layout (p->getProgression()).substring (0, 40) + ")");
+    editor->showMatch (true);
+    match.chooseFile = [dir] (std::function<void (const juce::File&)> then) { then (dir.getChildFile ("melody_only.mid")); };
+    match.openFile.onClick();
+    editor->refreshNow();
+    check (match.importedName() == "melody_only.mid" && ! match.getMatches().empty(), "Open .mid… on Match: the file's melody is matched");
     editor->showMatch (false);
     closeEditor (*p, editor);
 }

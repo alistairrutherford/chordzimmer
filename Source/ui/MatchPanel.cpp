@@ -190,6 +190,18 @@ namespace chordzimmer::ui
         bars.setSelectedId (3, juce::dontSendNotification);   // 4 bars
         bars.setComponentID ("ui.matchBars");
         bars.onChange = [this] { recompute(); };
+        openFile.setComponentID ("ui.matchOpen");
+        openFile.onClick = [this] { chooseAndImport(); };
+        chooseFile = [this] (std::function<void (const juce::File&)> then)
+        {
+            chooser = std::make_unique<juce::FileChooser> ("Match the notes of a MIDI file", juce::File(), "*.mid;*.midi;*.smf");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [then] (const juce::FileChooser& fc)
+                                  {
+                                      if (fc.getResult().existsAsFile())
+                                          then (fc.getResult());
+                                  });
+        };
         useHeard.setComponentID ("ui.matchUseHeard");
         useHeard.onClick = [this] { picker.setPicked ((imported.empty() ? heard : imported).mask()); };
         clear.setComponentID ("ui.matchClear");
@@ -229,7 +241,7 @@ namespace chordzimmer::ui
         list.onEndPreview = [this] { processor.endPreview(); };
         list.onAdd = [this] (const ProgressionChord& c) { if (onAdd) onAdd (c); };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &listen, &bars, &useHeard, &clear, &picker, &wide, &list, &root, &bass, &set, &add })
+        for (auto* c : std::initializer_list<juce::Component*> { &listen, &bars, &useHeard, &clear, &openFile, &picker, &wide, &list, &root, &bass, &set, &add })
             addAndMakeVisible (c);
         recompute();
     }
@@ -322,6 +334,14 @@ namespace chordzimmer::ui
         return true;
     }
 
+    void MatchPanel::chooseAndImport()
+    {
+        if (! chooseFile)
+            return;
+        juce::Component::SafePointer<MatchPanel> self (this);
+        chooseFile ([self] (const juce::File& f) { if (self != nullptr) self->importFile (f); });
+    }
+
     bool MatchPanel::isInterestedInFileDrag (const juce::StringArray& files)
     {
         for (const auto& f : files)
@@ -372,8 +392,7 @@ namespace chordzimmer::ui
         // Where the notes come from: a file dropped in, else Listen and the picker.
         g.setFont (font (10.5f));
         g.setColour (importedFrom.isNotEmpty() ? night::accent : colours::faint);
-        g.drawText (importedFrom.isNotEmpty() ? "From " + importedFrom : juce::String ("or drop a .mid here"),
-                    cards[0].bounds.reduced (12, 0).removeFromTop (titleHeight).translated (0, 3), juce::Justification::centredRight, true);
+        g.drawText (importedFrom.isNotEmpty() ? "From " + importedFrom : juce::String ("or drop a .mid here"), importedArea, juce::Justification::centredRight, true);
         if (fileOver)
         {
             g.setColour (night::accent);
@@ -428,6 +447,10 @@ namespace chordzimmer::ui
             c.setBounds (col.withSizeKeepingCentre (col.getWidth(), juce::jmin (col.getHeight(), 26)));
         };
 
+        auto notesTitle = cards[0].bounds.reduced (12, 0).removeFromTop (titleHeight).translated (0, 3);
+        openFile.setBounds (notesTitle.removeFromRight (78).reduced (0, 2));
+        notesTitle.removeFromRight (8);
+        importedArea = notesTitle;
         auto notesRow = rowOf (cards[0]);
         listen.setBounds (notesRow.removeFromLeft (70).reduced (3, 0).withTrimmedTop (captionHeight));
         notesRow.removeFromLeft (4);
