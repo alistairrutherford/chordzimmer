@@ -33,13 +33,13 @@ It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PL
 - **Relations** (the palette's title row): for the chord last chosen, each palette chord's
   function (V/vi, IV, rel, sub), notes in common and voice-leading distance, and **Next ▸**, five
   usual follow-ups.
-- **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with
-  the section names as markers. And the other way: **Import MIDI…** (beside it) opens a `.mid`
-  and puts its chords in at the insertion marker (its markers become sections; drums on channel 10
-  are left out); **Open .mid…**
-  on Match matches its melody. In the Standalone you can also drop the file on either. (In Live,
-  use the buttons: Live keeps a clip's drag to itself, and hides the plug-in window while the
-  Finder is in front, so drops don't reach it. Drag a clip to the desktop first to get a file.)
+- **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with the
+  section names as markers. And the other way: **Import MIDI…** (beside it) opens a `.mid` and puts
+  its chords in at the insertion marker (its markers become sections; drum parts are left out, on
+  any channel); **Open .mid…** on Match matches its melody. In the Standalone you can also drop the
+  file on either. (In Live, use the buttons: Live keeps a clip's drag to itself, and hides the
+  plug-in window while the Finder is in front, so drops don't reach it. Drag a clip to the desktop
+  first to get a file.)
 - **Performance** (the footer): strum, velocity, voicing, bass, voice leading, octave, stack, and
   what keys played in do (chords of the home key, Heard, Detect).
 - **Presets:** the factory presets, your own, and **Templates** (Four Chords, Minor Axis,

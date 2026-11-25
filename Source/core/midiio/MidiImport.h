@@ -26,8 +26,15 @@
 //            names so) start sections named after them; without markers, one section named
 //            after the file. A section holds at most maxSectionChords (then "Name 2" …), the
 //            progression maxProgressionChords (the rest are dropped and counted)
-//   drums    notes on MIDI channel 10 (General MIDI's drums) are left out before anything else,
-//            so a song's drum track doesn't make chords or melody; they're counted
+//   drums    drum parts are left out before anything else, so they make no chords or melody;
+//            their notes are counted. A part (a track's notes on one channel) is drums when it's
+//            on MIDI channel 10 (General MIDI), when its track is named "drum…" or "perc…", or
+//            when it plays like a kit: at least 8 notes, mostly short (the median 1/4 beat or
+//            less), 40% of them or more on the kit keys 35–51 (kick … ride), and either a hi-hat
+//            (42, 44, 46) with a kick or snare (35, 36, 38, 40), or two of the keys 35–40 (kick,
+//            snare, clap) struck together at least twice, as a bass line hardly does. (Live
+//            exports every clip on channel 1, naming the track after the clip; found with
+//            Tools/import_report.)
 //   melody   the notes that aren't part of a chord, as a NoteSet for Match (beats each pitch
 //            class sounds; the bass is the lowest); a file with no notes outside its chords
 //            gives all of its notes
@@ -38,6 +45,7 @@
 #include "../theory/Matcher.h"
 #include "MidiFile.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -59,6 +67,61 @@ namespace chordzimmer
     {
         struct Note { double start, end, seconds; int pitch; };
         constexpr int drumChannel = 9;    // MIDI channel 10, counted from 0
+
+        inline int partOf (const MidiNote& n) noexcept { return (int) n.track * 16 + (n.channel & 15); }
+
+        inline bool drumName (std::string name) noexcept
+        {
+            for (auto& ch : name)
+                ch = (char) std::tolower ((unsigned char) ch);
+            return name.find ("drum") != std::string::npos || name.find ("perc") != std::string::npos;
+        }
+
+        // Which parts (track × 16 + channel) are drums (see the top of the file).
+        inline std::vector<bool> drumParts (const MidiSong& song)
+        {
+            int parts = 16;
+            for (const auto& n : song.notes)
+                parts = std::max (parts, partOf (n) + 1);
+            std::vector<bool> drums ((size_t) parts, false);
+            struct Stats { int notes = 0, kit = 0; bool hat = false, kickOrSnare = false; std::vector<int64_t> lengths, lowStarts; };
+            std::vector<Stats> stats ((size_t) parts);
+            for (const auto& n : song.notes)
+            {
+                auto& st = stats[(size_t) partOf (n)];
+                ++st.notes;
+                st.kit += n.pitch >= 35 && n.pitch <= 51 ? 1 : 0;
+                st.hat |= n.pitch == 42 || n.pitch == 44 || n.pitch == 46;
+                st.kickOrSnare |= n.pitch == 35 || n.pitch == 36 || n.pitch == 38 || n.pitch == 40;
+                st.lengths.push_back (std::max<int64_t> (n.end - n.start, 1));
+                if (n.pitch >= 35 && n.pitch <= 40)
+                    st.lowStarts.push_back (n.start);
+            }
+            const int64_t quarterBeat = std::max (1, song.ppq / 4);
+            for (int part = 0; part < parts; ++part)
+            {
+                auto& st = stats[(size_t) part];
+                if (st.notes == 0)
+                    continue;
+                const size_t track = (size_t) (part / 16);
+                const bool named = track < song.trackNames.size() && drumName (song.trackNames[track]);
+                bool kit = false;
+                // Kick, snare or clap struck together: count the ticks with two or more of them.
+                std::sort (st.lowStarts.begin(), st.lowStarts.end());
+                int together = 0;
+                for (size_t i = 1; i < st.lowStarts.size(); ++i)
+                    if (st.lowStarts[i] == st.lowStarts[i - 1] && (i < 2 || st.lowStarts[i - 2] != st.lowStarts[i]))
+                        ++together;
+                const bool kitShape = (st.hat && st.kickOrSnare) || together >= 2;
+                if (st.notes >= 8 && kitShape && st.kit * 5 >= st.notes * 2)
+                {
+                    std::nth_element (st.lengths.begin(), st.lengths.begin() + (long) (st.lengths.size() / 2), st.lengths.end());
+                    kit = st.lengths[st.lengths.size() / 2] <= quarterBeat;
+                }
+                drums[(size_t) part] = part % 16 == drumChannel || named || kit;
+            }
+            return drums;
+        }
 
         inline int pcCount (unsigned m) noexcept
         {
@@ -100,8 +163,9 @@ namespace chordzimmer
         const double secondsPerBeat = 60.0 / (song.bpm > 0.0 ? song.bpm : 120.0);
 
         std::vector<Note> notes;
+        const auto drums = drumParts (song);
         for (const auto& n : song.notes)
-            if ((n.channel & 15) == drumChannel)
+            if (drums[(size_t) partOf (n)])
                 ++out.drumNotes;
             else
                 notes.push_back ({ (double) n.start / ppq, (double) std::max (n.end, n.start + 1) / ppq, (double) n.start / ppq * secondsPerBeat, n.pitch });

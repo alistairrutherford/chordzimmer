@@ -17,6 +17,10 @@ Run from anywhere:  python3 Tools/gen_import_fixtures.py
   rests.mid           type 1, 480 ppq: 2 beats of silence, C for 2 beats, 2 beats' rest, G for 4
   band_drums.mid      type 1, 480 ppq: a piano track (Am F C G, 4 beats each) and a drum track on
                       channel 10 (kick, snare and hi-hat struck together on every beat)
+  live_drums.mid      type 0, 96 ppq, as Live exports a drum clip: channel 1, the track named after
+                      the clip ("Funk"), two bars of kick, snare and eighth hi-hats, each 1/8 beat
+  live_band.mid       type 1, 96 ppq: a piano (C Am, a bar each) and a kit on channel 1 in a track
+                      named "Beat", the hi-hats in 16ths a quarter beat long
   not_midi.mid        text, not a MIDI file
 """
 import os
@@ -139,6 +143,23 @@ write("band_drums.mid", 1, ppq, [
     track([(0, tempo(110))]),
     track([(0, meta(0x03, "Piano"))] + notes(ppq, [(0, 4, [45, 48, 52], 0), (4, 4, [41, 45, 48], 0), (8, 4, [48, 52, 55], 0), (12, 4, [43, 47, 50], 0)])),
     track([(0, meta(0x03, "Drums"))] + notes(ppq, [(b, 0.25, [36, 38, 42], 0) for b in range(16)], channel=9, velocity=110)),
+])
+
+# Drums as Live exports them: channel 1, the track named after the clip, not "drums".
+def kit(ppq, bars, hat_step, length):
+    ev = []
+    for b in range(bars * 4):
+        ev += notes(ppq, [(b, length, [36 if b % 2 == 0 else 38], 0)], velocity=110)
+    steps = int(bars * 4 / hat_step)
+    ev += notes(ppq, [(i * hat_step, length, [42], 0) for i in range(steps)], velocity=80)
+    return sorted(ev, key=lambda e: e[0])
+
+ppq = 96
+write("live_drums.mid", 0, ppq, [track([(0, meta(0x03, "Funk")), (0, tempo(120))] + kit(ppq, 2, 0.5, 0.125))])
+write("live_band.mid", 1, ppq, [
+    track([(0, tempo(120))]),
+    track([(0, meta(0x03, "Piano"))] + notes(ppq, [(0, 4, [48, 52, 55], 0), (4, 4, [45, 48, 52], 0)])),
+    track([(0, meta(0x03, "Beat"))] + kit(ppq, 2, 0.25, 0.25)),
 ])
 
 with open(os.path.join(OUT, "not_midi.mid"), "wb") as f:

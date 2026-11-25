@@ -101,6 +101,13 @@ static void testFixtures()
     check (r.ok() && layout (r.chords) == "Imported[Am:4 F:4 C:4 G:4]" && r.drumNotes == 48 && r.numNotes == 12,
            "a piano and drums on channel 10: the piano's Am F C G, the 48 drum notes left out (" + layout (r.chords) + ")");
 
+    r = load ("live_drums.mid");
+    check (r.ok() && r.chords.empty() && r.numNotes == 0 && r.drumNotes == 24 && r.melody.empty(),
+           "a drum clip as Live exports it (channel 1, named after the clip): all 24 notes are drums, no chords, no melody");
+    r = load ("live_band.mid");
+    check (r.ok() && layout (r.chords) == "Imported[C:4 Am:4]" && r.drumNotes == 40 && r.numNotes == 6,
+           "a piano and a kit on channel 1 in a track named \"Beat\": C Am, the 40 drum notes left out (" + layout (r.chords) + ")");
+
     r = load ("not_midi.mid");
     check (! r.ok() && r.chords.empty() && r.melody.empty() && r.error == "not a MIDI file", "a text file: an error, nothing imported");
     check (! importMidiFile (nullptr, 0, 0, Scale::Major, "x").ok(), "no data: an error");
@@ -185,6 +192,46 @@ static void testLimits()
     const auto b = importMidi (band, 0, Scale::Major, "Band");
     check (layout (b.chords) == "Band[C:4 G:4]" && b.drumNotes == 32 && b.numNotes == 6 && b.melody.empty() == false,
            "drums on channel 10 are left out: Band[C:4 G:4], 32 drum notes counted (" + layout (b.chords) + ", drums " + std::to_string (b.drumNotes) + ")");
+
+    // Not drums: parts that share some of a kit's traits.
+    const auto part = [] (std::vector<MidiNote> notes, const std::string& trackName = "")
+    {
+        MidiSong s;
+        s.ppq = 96;
+        s.trackNames = { trackName };
+        s.notes = std::move (notes);
+        std::stable_sort (s.notes.begin(), s.notes.end(), [] (const MidiNote& a, const MidiNote& b) { return a.start < b.start; });
+        return importMidi (s, 0, Scale::Major, "Part");
+    };
+    // A bass pulsing E1 / E2 in 16ths, a quarter beat each: short and low, but no hi-hat.
+    std::vector<MidiNote> pulse;
+    for (int i = 0; i < 32; ++i)
+        pulse.push_back ({ i * 24, i * 24 + 24, (uint8_t) (i % 4 == 3 ? 52 : 40), 100, 0 });
+    check (part (pulse).drumNotes == 0, "a bass pulsing on E in 16ths isn't drums (no hi-hat)");
+    // Staccato chord stabs, an eighth of a beat each, in the middle: short, but off the kit keys.
+    std::vector<MidiNote> stabs;
+    for (int i = 0; i < 8; ++i)
+        for (int k : { 60, 64, 67 })
+            stabs.push_back ({ i * 96, i * 96 + 12, (uint8_t) k, 100, 0 });
+    const auto st = part (stabs);
+    check (st.drumNotes == 0 && layout (st.chords) == "Part[C:8]", "staccato C stabs on every beat aren't drums: C, 8 beats (" + layout (st.chords) + ")");
+    // Kick and clap struck together on the downbeats, no hi-hat (as an exported fill): drums.
+    std::vector<MidiNote> fill;
+    for (int b = 0; b < 8; ++b)
+    {
+        fill.push_back ({ b * 96, b * 96 + 16, 39, 100, 0 });
+        if (b % 2 == 0)
+            fill.push_back ({ b * 96, b * 96 + 18, 35, 100, 0 });
+    }
+    check (part (fill).drumNotes == 12, "kick and clap struck together, no hi-hat: drums");
+    // A bass walking C1 D1 E1 in short notes, one at a time: not drums.
+    std::vector<MidiNote> walk;
+    for (int i = 0; i < 16; ++i)
+        walk.push_back ({ i * 24, i * 24 + 20, (uint8_t) (36 + 2 * (i % 3)), 100, 0 });
+    check (part (walk).drumNotes == 0, "a bass walking C1 D1 E1 in 16ths, one note at a time: not drums");
+    // A track named "Percussion" is drums, whatever it plays.
+    check (part ({ { 0, 96, 60, 100, 0 }, { 0, 96, 64, 100, 0 }, { 0, 96, 67, 100, 0 } }, "Percussion").drumNotes == 3,
+           "a track named \"Percussion\" is drums");
 }
 
 int main()

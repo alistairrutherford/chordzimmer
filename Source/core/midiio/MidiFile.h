@@ -25,6 +25,7 @@ namespace chordzimmer
     {
         int64_t start = 0, end = 0;       // ticks
         uint8_t pitch = 60, velocity = 100, channel = 0;
+        uint16_t track = 0;               // reading: the file's track it came from (the writer ignores it)
     };
 
     struct MidiMarker
@@ -43,6 +44,7 @@ namespace chordzimmer
         std::string name;
         std::vector<MidiNote> notes;      // sorted by start, then pitch
         std::vector<MidiMarker> markers;  // meta-event 6, by tick (Phase 7: section names)
+        std::vector<std::string> trackNames;   // reading: each track's name (meta-event 3), "" if none
     };
 
     namespace smf
@@ -235,6 +237,8 @@ namespace chordzimmer
 
             smf::Reader t { r.p, r.p + length };
             r.skip (length);
+            const auto trackIndex = (uint16_t) song.trackNames.size();
+            song.trackNames.emplace_back();
             int64_t tick = 0;
             uint8_t status = 0;
             std::vector<std::vector<size_t>> open (16 * 128);   // (channel, pitch) → notes still on, oldest first
@@ -261,9 +265,12 @@ namespace chordzimmer
                         song.denominator = 1 << (t.p[1] < 7 ? t.p[1] : 2);
                         haveSignature = true;
                     }
-                    else if (type == 0x03 && song.name.empty())
+                    else if (type == 0x03)
                     {
-                        song.name.assign ((const char*) t.p, len);
+                        if (song.trackNames.back().empty())
+                            song.trackNames.back().assign ((const char*) t.p, len);
+                        if (song.name.empty())
+                            song.name.assign ((const char*) t.p, len);
                     }
                     else if (type == 0x06)
                     {
@@ -302,7 +309,7 @@ namespace chordzimmer
                 if (kind == 0x90 && d2 > 0)
                 {
                     open[slot].push_back (song.notes.size());
-                    song.notes.push_back ({ tick, -1, (uint8_t) (d1 & 127), (uint8_t) d2, channel });
+                    song.notes.push_back ({ tick, -1, (uint8_t) (d1 & 127), (uint8_t) d2, channel, trackIndex });
                 }
                 else if (kind == 0x80 || kind == 0x90)
                 {

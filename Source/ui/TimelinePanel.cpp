@@ -1119,8 +1119,11 @@ namespace chordzimmer::ui
         }
         if (imported.chords.empty())
         {
-            say (file.getFileName() + " has no chords (" + juce::String (imported.numNotes) + " notes"
-                 + (imported.drumNotes > 0 ? ", besides its drums" : "") + "). To match chords to a melody, drop it on Match.");
+            if (imported.numNotes == 0 && imported.drumNotes > 0)
+                say (file.getFileName() + " is all drums (" + juce::String (imported.drumNotes) + " notes): no chords to import.");
+            else
+                say (file.getFileName() + " has no chords (" + juce::String (imported.numNotes) + " notes"
+                     + (imported.drumNotes > 0 ? ", besides its drums" : "") + "). To match chords to a melody, drop it on Match.");
             return false;
         }
         at = clampInsertPoint (model, at);
@@ -1139,7 +1142,7 @@ namespace chordzimmer::ui
         say (file.getFileName() + ": " + juce::String (imported.chords.numChords()) + " chords in "
              + juce::String (imported.chords.numSections()) + (imported.chords.numSections() == 1 ? " section" : " sections")
              + (imported.droppedChords > 0 ? ", " + juce::String (imported.droppedChords) + " left out (too many)" : juce::String())
-             + (imported.drumNotes > 0 ? "; the drums (channel 10) left out" : "") + ".");
+             + (imported.drumNotes > 0 ? "; the drums left out" : "") + ".");
         return true;
     }
 
