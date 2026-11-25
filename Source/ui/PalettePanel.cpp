@@ -358,7 +358,9 @@ namespace chordzimmer::ui
                 }
                 const bool hover = ref == hovered, down = ref == pressed && previewing;
                 const bool lit = soundingPcs != 0 && c.pitchClasses == soundingPcs && c.root == soundingRoot;
-                if (hover && ! down)
+                if (lit)
+                    orb = orb.withSizeKeepingCentre (orb.getWidth() * 1.12f, orb.getHeight() * 1.12f);
+                else if (hover && ! down)
                     orb = orb.withSizeKeepingCentre (orb.getWidth() * 1.06f, orb.getHeight() * 1.06f);
                 const float glow = lit ? night::glowIdle + (night::glowPlay - night::glowIdle) * pulse
                                        : (hover || down ? night::glowHover : night::glowIdle * 0.6f);
@@ -369,6 +371,14 @@ namespace chordzimmer::ui
                 const bool faded = (matchActive && rank == 0) || (showRel && ! isFocus && ! relation.related());
                 if (faded)
                     g.beginTransparencyLayer (0.3f);
+                if (lit)
+                {
+                    // The chord playing (1.2.1): an amber halo behind it, steady between beats (a
+                    // keyboard's chord has no beat), brighter on each beat.
+                    juce::Path halo;
+                    halo.addRoundedRectangle (orb.expanded (3.0f), orb.getHeight() * 0.5f + 3.0f);
+                    juce::DropShadow (night::accent.withAlpha (0.55f + 0.35f * pulse), 18, {}).drawForPath (g, halo);
+                }
                 drawChordOrb (g, orb, c.family, c.inKey, glow, orb.getHeight() * 0.5f);
                 if (lit || down)
                 {
@@ -388,10 +398,17 @@ namespace chordzimmer::ui
                 g.drawFittedText (juce::String::fromUTF8 (c.numeral.c_str()), text.toNearestInt(), juce::Justification::centredTop, 1, 0.6f);
                 if (faded)
                     g.endTransparencyLayer();
+                if (lit)
+                {
+                    // …and a solid amber ring round it.
+                    g.setColour (night::accent.withAlpha (0.9f + 0.1f * pulse));
+                    g.drawRoundedRectangle (orb.expanded (2.0f), orb.getHeight() * 0.5f + 2.0f, 2.5f);
+                }
                 if (isFocus)
                 {
+                    const float out = lit ? 5.5f : 2.5f;     // outside the amber ring when it's playing too
                     g.setColour (juce::Colours::white.withAlpha (0.9f));
-                    g.drawRoundedRectangle (orb.expanded (2.5f), orb.getHeight() * 0.5f + 2.5f, 1.5f);
+                    g.drawRoundedRectangle (orb.expanded (out), orb.getHeight() * 0.5f + out, 1.5f);
                 }
                 if (showRel && ! isFocus && ! faded)
                 {

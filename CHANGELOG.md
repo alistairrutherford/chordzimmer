@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 (2026-11-25)
+
+- **The chord playing stands out on the palette:** its button grows a little, with an amber ring
+  and an amber glow behind it, steady between beats (so a keyboard's chord shows as clearly as
+  the timeline's) and brighter on each beat. Before, only its own glow and a faint wash pulsed.
+  When it's also Relations' focus, the white focus ring goes outside the amber one.
+
 ## 1.2.0 (2026-11-25): Follow
 
 - **Follow**, a tick box in the palette's title row (saved with the plug-in, off at first):

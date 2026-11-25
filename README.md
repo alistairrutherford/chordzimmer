@@ -7,7 +7,7 @@ key; **borrowing** around the circle of fifths and from parallel modes; a sectio
 MIDI clips. It makes no sound itself: it sends MIDI to an instrument on another track.
 It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PLAN.md](PLAN.md).
 
-**Version 1.2.0** (2026-11-25: Follow; 1.1.0 tuned the MIDI import on real files; 1.0.0 finished PLAN.md's phases). What changed:
+**Version 1.2.1** (2026-11-25: the playing chord stands out; 1.2.0 added Follow; 1.1.0 tuned the MIDI import on real files; 1.0.0 finished PLAN.md's phases). What changed:
 [CHANGELOG.md](CHANGELOG.md).
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
