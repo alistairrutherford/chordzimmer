@@ -3,8 +3,8 @@
 // commands"; Tests/test_timeline.cpp drives them as scripted drags).
 //
 // Layout: sections side by side, left to right, each `pixelsPerBeat` wide per beat, with a
-// fixed `gap` between two sections (the drop zone for a new section, as Klimper's "to the
-// left/right of a section"). A section has two rows: its tab (name; drag its right edge to scale
+// fixed `gap` between two sections (the drop zone for a new section, to the
+// left or right of a section). A section has two rows: its tab (name; drag its right edge to scale
 // the section) and its chords (drag a chord's right edge to change its duration). x is in the
 // panel's pixels; `origin` is where the progression starts, after scrolling.
 //

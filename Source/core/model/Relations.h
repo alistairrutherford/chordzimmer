@@ -1,5 +1,4 @@
-// Chord Relations (PLAN.md §3.5, Phase 6; our own design: Klimper's manual doesn't describe its
-// button). Plain C++, no JUCE; std::vector and std::string, for the message thread and tests.
+// Chord Relations (PLAN.md §3.5, Phase 6; our own design). Plain C++, no JUCE; std::vector and std::string, for the message thread and tests.
 // (In core/model rather than PLAN.md §4.1's core/theory: it builds on Substitutes.h and the
 // timeline's chords, which live here.)
 //

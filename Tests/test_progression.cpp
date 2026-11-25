@@ -90,7 +90,7 @@ static void testSnap()
                && snapUnitTicks (Snap::Half) == 192 && snapUnitTicks (Snap::Bar) == 384 && snapUnitTicks (Snap::Bar, 3) == 288
                && snapUnitTicks (Snap::Off) == 1,
            "grid: 1/16 = 24, 1/8 = 48, 1/4 = 96, 1/2 = 192, bar = 384 (288 in 3/4), off = 1 tick");
-    check (defaultSnap == Snap::Eighth, "the default snap is 1/8 (as Klimper)");
+    check (defaultSnap == Snap::Eighth, "the default snap is 1/8");
     check (snapDuration (100, Snap::Eighth) == 96 && snapDuration (70, Snap::Eighth) == 48 && snapDuration (72, Snap::Eighth) == 96,
            "1/8: 100 → 96, 70 → 48, 72 → 96 (halves round up)");
     check (snapDuration (0, Snap::Eighth) == 48 && snapDuration (-500, Snap::Eighth) == 48, "1/8: never shorter than one step");
@@ -262,7 +262,7 @@ static void testDuplicate()
     p = song();
     check (p.duplicate (Selection::section (1), InsertPoint::newSection (1))
                && layout (p) == "Verse[C4 G4 Am4 F4] Chorus[F4 G4] Chorus[F4 G4] Bridge[Dm2 Em2]",
-           "Alt-drag a section in place, between sections (Klimper reviewers' complaint)");
+           "Alt-drag a section in place, between sections");
     check (p.sections[1] == p.sections[2], "… an exact copy, name and colour too");
     p = song();
     check (p.duplicate (Selection::section (2), InsertPoint::newSection (0)) && layout (p) == "Bridge[Dm2 Em2] Verse[C4 G4 Am4 F4] Chorus[F4 G4] Bridge[Dm2 Em2]",

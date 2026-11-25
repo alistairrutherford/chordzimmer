@@ -1,13 +1,11 @@
 # ChordZimmer
 
-A MIDI chord plug-in (VST3) for Ableton Live on macOS that brings Klimper 2's way of making chords
-to Live: a **chord palette** by scale degree and complexity, colour-coded by chord family and
-marked in or out of key; **borrowing** around the circle of fifths and from parallel modes; a
-section-based **progression timeline**; **matching chords to a melody**; **chord relations**; and
-drag-out to MIDI clips. It makes no sound itself: it sends MIDI to an instrument on another track.
+A MIDI chord plug-in (VST3) for Ableton Live on macOS for writing chord progressions: a **chord
+palette** by scale degree and complexity, colour-coded by chord family and marked in or out of
+key; **borrowing** around the circle of fifths and from parallel modes; a section-based
+**progression timeline**; **matching chords to a melody**; **chord relations**; and drag-out to
+MIDI clips. It makes no sound itself: it sends MIDI to an instrument on another track.
 It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PLAN.md](PLAN.md).
-
-ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual text or name.
 
 **Version 1.0.0** (2026-11-25: all of PLAN.md's phases done, the optional Phase 9 included). What changed:
 [CHANGELOG.md](CHANGELOG.md).

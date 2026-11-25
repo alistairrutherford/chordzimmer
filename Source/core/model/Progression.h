@@ -51,7 +51,7 @@ namespace chordzimmer
     constexpr int minChordOctave = minSlotOctave, maxChordOctave = maxSlotOctave;
 
     //==========================================================================
-    // Snap (PLAN.md §3.3): 1/16 … 1 bar, default 1/8 as Klimper; Off keeps any whole tick.
+    // Snap (PLAN.md §3.3): 1/16 … 1 bar, default 1/8; Off keeps any whole tick.
 
     enum class Snap : uint8_t { Off, Sixteenth, Eighth, Quarter, Half, Bar };
     constexpr Snap defaultSnap = Snap::Eighth;
