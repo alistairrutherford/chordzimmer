@@ -15,6 +15,8 @@ Run from anywhere:  python3 Tools/gen_import_fixtures.py
   sections.mid        type 1, 960 ppq, markers "Verse" at 0 and "Chorus" at beat 8 (as ChordZimmer
                       exports them): Verse C G, Chorus F G (4 beats each)
   rests.mid           type 1, 480 ppq: 2 beats of silence, C for 2 beats, 2 beats' rest, G for 4
+  band_drums.mid      type 1, 480 ppq: a piano track (Am F C G, 4 beats each) and a drum track on
+                      channel 10 (kick, snare and hi-hat struck together on every beat)
   not_midi.mid        text, not a MIDI file
 """
 import os
@@ -129,6 +131,15 @@ write("sections.mid", 1, ppq, [
 # Rests: a lead-in, then a gap between two chords.
 ppq = 480
 write("rests.mid", 1, ppq, [track([(0, tempo(120))]), track(notes(ppq, [(2, 2, [48, 52, 55], 0), (6, 4, [43, 47, 50], 0)]))])
+
+# A band: the piano's chords, and drums on channel 10 struck together on every beat (since 1.0 the
+# import leaves channel 10 out; before, kick + snare + hat counted as a chord).
+ppq = 480
+write("band_drums.mid", 1, ppq, [
+    track([(0, tempo(110))]),
+    track([(0, meta(0x03, "Piano"))] + notes(ppq, [(0, 4, [45, 48, 52], 0), (4, 4, [41, 45, 48], 0), (8, 4, [48, 52, 55], 0), (12, 4, [43, 47, 50], 0)])),
+    track([(0, meta(0x03, "Drums"))] + notes(ppq, [(b, 0.25, [36, 38, 42], 0) for b in range(16)], channel=9, velocity=110)),
+])
 
 with open(os.path.join(OUT, "not_midi.mid"), "wb") as f:
     f.write(b"This is not a MIDI file.\n")

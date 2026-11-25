@@ -21,6 +21,7 @@ below say what each one added.
 - Walked six fifths down, the palette reads **Gb** (Cb, Db …), not F#, and its header says
   "6 fifths down", not "up".
 - **MIDI import** leaves out channel 10 (General MIDI's drums); the Info View says so.
+- Tests: `band_drums.mid` (a piano and drums) joins the import fixtures.
 
 ## Phase 9, MIDI files in (in 1.0.0)
 

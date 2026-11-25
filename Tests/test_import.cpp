@@ -97,6 +97,10 @@ static void testFixtures()
     r = load ("rests.mid");
     check (r.ok() && layout (r.chords) == "Imported[C:4 G:4]", "a lead-in is dropped; a rest belongs to the chord before (" + layout (r.chords) + ")");
 
+    r = load ("band_drums.mid");
+    check (r.ok() && layout (r.chords) == "Imported[Am:4 F:4 C:4 G:4]" && r.drumNotes == 48 && r.numNotes == 12,
+           "a piano and drums on channel 10: the piano's Am F C G, the 48 drum notes left out (" + layout (r.chords) + ")");
+
     r = load ("not_midi.mid");
     check (! r.ok() && r.chords.empty() && r.melody.empty() && r.error == "not a MIDI file", "a text file: an error, nothing imported");
     check (! importMidiFile (nullptr, 0, 0, Scale::Major, "x").ok(), "no data: an error");
