@@ -164,6 +164,23 @@ static void testLimits()
     two.notes = { { 0, 384, 48, 90, 0 }, { 0, 384, 55, 90, 0 }, { 384, 768, 48, 90, 0 }, { 384, 768, 52, 90, 0 } };
     const auto t = importMidi (two, 0, Scale::Major, "Two");
     check (layout (t.chords) == "Two[C5:4]" && t.melodyNotes == 2, "C and G: a power chord, the last, to its own release; C and E after it: melody (" + layout (t.chords) + ")");
+
+    // Drums on channel 10 (kick, snare, hats struck together on every beat) are left out:
+    // the chords are the piano's C and G, not a drum "chord", and the melody has no drums in it.
+    MidiSong band;
+    band.ppq = 96;
+    for (int beat = 0; beat < 8; ++beat)
+    {
+        for (int k : { 36, 38, 42, 46 })
+            band.notes.push_back ({ (int64_t) beat * 96, (int64_t) beat * 96 + 20, (uint8_t) k, 100, 9 });
+        if (beat % 4 == 0)
+            for (int k : { 0, 4, 7 })
+                band.notes.push_back ({ (int64_t) beat * 96, (int64_t) beat * 96 + 380, (uint8_t) ((beat == 0 ? 48 : 43) + k), 90, 0 });
+    }
+    std::stable_sort (band.notes.begin(), band.notes.end(), [] (const MidiNote& a, const MidiNote& b) { return a.start < b.start; });
+    const auto b = importMidi (band, 0, Scale::Major, "Band");
+    check (layout (b.chords) == "Band[C:4 G:4]" && b.drumNotes == 32 && b.numNotes == 6 && b.melody.empty() == false,
+           "drums on channel 10 are left out: Band[C:4 G:4], 32 drum notes counted (" + layout (b.chords) + ", drums " + std::to_string (b.drumNotes) + ")");
 }
 
 int main()

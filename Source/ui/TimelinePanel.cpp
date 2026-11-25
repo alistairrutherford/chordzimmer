@@ -970,7 +970,9 @@ namespace chordzimmer::ui
         juce::Component::SafePointer<TimelinePanel> self (this);
         juce::PopupMenu inversion, octave, bass, menu;
         static const char* const inversions[] = { "Root position", "1st inversion", "2nd inversion", "3rd inversion" };
-        for (int i = 0; i <= maxChordInversion; ++i)
+        // Only the inversions the chord has (slotNotes stops at its last tone): a triad has two.
+        const int invCount = std::min (maxChordInversion, std::max (0, c->chord.size - 1));
+        for (int i = 0; i <= invCount; ++i)
             inversion.addItem (inversions[i], true, c->inversion == i, [self, r, i] { if (self) self->setInversion (r, i); });
         for (int o = maxChordOctave; o >= minChordOctave; --o)
             octave.addItem (o == 0 ? juce::String ("As built") : (o > 0 ? "+" : "") + juce::String (o), true, c->octave == o,
@@ -1117,8 +1119,8 @@ namespace chordzimmer::ui
         }
         if (imported.chords.empty())
         {
-            say (file.getFileName() + " has no chords (" + juce::String (imported.numNotes)
-                 + " notes). To match chords to a melody, drop it on Match.");
+            say (file.getFileName() + " has no chords (" + juce::String (imported.numNotes) + " notes"
+                 + (imported.drumNotes > 0 ? ", besides its drums" : "") + "). To match chords to a melody, drop it on Match.");
             return false;
         }
         at = clampInsertPoint (model, at);
@@ -1136,7 +1138,8 @@ namespace chordzimmer::ui
         }
         say (file.getFileName() + ": " + juce::String (imported.chords.numChords()) + " chords in "
              + juce::String (imported.chords.numSections()) + (imported.chords.numSections() == 1 ? " section" : " sections")
-             + (imported.droppedChords > 0 ? ", " + juce::String (imported.droppedChords) + " left out (too many)" : juce::String()) + ".");
+             + (imported.droppedChords > 0 ? ", " + juce::String (imported.droppedChords) + " left out (too many)" : juce::String())
+             + (imported.drumNotes > 0 ? "; the drums (channel 10) left out" : "") + ".");
         return true;
     }
 

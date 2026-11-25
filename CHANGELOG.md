@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased: Phase 9, MIDI files in
+## 1.0.0 (2026-11-25)
+
+The first release: every phase of PLAN.md §6 (0–9), checked in Ableton Live 12. The phases
+below say what each one added.
+
+- **Palette** by scale degree and complexity, colour-coded, in-key filled and out-of-key
+  hollow; **borrowing** around the circle of fifths and from parallel modes.
+- **Timeline** of sections and chords: drag in from the palette, resize, move, Option-drag to
+  copy, undo; plays in time with Live (Sync) or on its own (Preview), loops the selection.
+- **Match** a melody (Listen, the note picker, or a `.mid`) against the palette, and **Chord
+  from notes**; **Chord Relations** (what comes next, what can replace a chord).
+- **Drag MIDI** of the selection into Live as a clip; **Import MIDI…** of a `.mid`'s chords
+  into the timeline; factory template progressions on the preset menu.
+
+### Fixed since Phase 9
+
+- A chord's **Inversion** menu offers only the inversions it has (a triad: root position, 1st
+  and 2nd).
+- Walked six fifths down, the palette reads **Gb** (Cb, Db …), not F#, and its header says
+  "6 fifths down", not "up".
+- **MIDI import** leaves out channel 10 (General MIDI's drums); the Info View says so.
+
+## Phase 9, MIDI files in (in 1.0.0)
 
 PLAN.md §6, Phase 9 (the optional one).
 
@@ -17,7 +39,7 @@ PLAN.md §6, Phase 9 (the optional one).
 - Tests: `test_import` on nine fixture files written by `Tools/gen_import_fixtures.py`; the
   snapshot test drops files on the timeline and on Match.
 
-## Unreleased: Phase 8, hardening and install
+## Phase 8, hardening and install (in 1.0.0)
 
 PLAN.md §6, Phase 8.
 
@@ -38,7 +60,7 @@ PLAN.md §6, Phase 8.
   `Tests/snapshot_build.sh` builds the snapshot app against a JUCE elsewhere.
 - **README** rewritten: what it does, building and testing, using it in Live.
 
-## Unreleased: Phase 6, Chord Relations
+## Phase 6, Chord Relations (in 1.0.0)
 
 PLAN.md §6, Phase 6; §3.5.
 
@@ -59,7 +81,7 @@ PLAN.md §6, Phase 6; §3.5.
   distances, Next, Replace with); the snapshot test checks the focus from the palette and the
   timeline, Next and Replace with, with a new reference image (`editor-relations`).
 
-## Unreleased: Phase 7, the selection's drag-out
+## Phase 7, the selection's drag-out (in 1.0.0)
 
 PLAN.md §6, Phase 7; §3.7.
 
@@ -78,7 +100,7 @@ PLAN.md §6, Phase 7; §3.7.
   that a selection's export is what a host records with it as the loop region; the snapshot
   test drags out the whole progression and a selection.
 
-## Unreleased: Phase 5, Match and Chord-from-notes
+## Phase 5, Match and Chord-from-notes (in 1.0.0)
 
 PLAN.md §6, Phase 5; §3.4.
 
@@ -104,7 +126,7 @@ PLAN.md §6, Phase 5; §3.4.
   through `processBlock` (no allocation), the palette's ranks, Set and Add, and Listen not
   being saved, with a new reference image (`editor-match`).
 
-## Unreleased: Phase 4, the editor
+## Phase 4, the editor (in 1.0.0)
 
 The palette, the key navigator and the timeline (PLAN.md §6, Phase 4; §3.1–§3.3, §5).
 
@@ -144,7 +166,7 @@ The palette, the key navigator and the timeline (PLAN.md §6, Phase 4; §3.1–�
   (`Tests/run_snapshot.sh`: reference images, every parameter reachable, the Info View, the
   timeline's and palette's mouse gestures, undo, state, Detect, no allocation while playing).
 
-## Unreleased: Phase 3, playback
+## Phase 3, playback (in 1.0.0)
 
 Engine and processor only (PLAN.md §6, Phase 3); the timeline UI is Phase 4.
 
@@ -172,7 +194,7 @@ Engine and processor only (PLAN.md §6, Phase 3); the timeline UI is Phase 4.
   loads the progression, for checks in Live.
 - Tests: `test_player` rewritten for the timeline; `test_render` renders through it.
 
-## Unreleased: Phase 2, progression model
+## Phase 2, progression model (in 1.0.0)
 
 Core and state only (PLAN.md §6, Phase 2); the timeline UI is Phase 4 and playback Phase 3.
 
@@ -192,7 +214,7 @@ Core and state only (PLAN.md §6, Phase 2); the timeline UI is Phase 4 and playb
   progression. States and presets from before have none and load empty.
 - Tests: `test_progression`.
 
-## Unreleased: Phase 1, palette theory
+## Phase 1, palette theory (in 1.0.0)
 
 Core only (PLAN.md §6, Phase 1); the editor doesn't use it yet (Phase 4).
 

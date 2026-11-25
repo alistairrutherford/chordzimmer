@@ -9,7 +9,7 @@ It's a fork of [ChordMonkey](../chordmonkey). The plan and its status are in [PL
 
 ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual text or name.
 
-**Version 0.0.1** (all of PLAN.md's phases done, the optional Phase 9 included, 2026-11-24; not released yet). What changed:
+**Version 1.0.0** (2026-11-25: all of PLAN.md's phases done, the optional Phase 9 included). What changed:
 [CHANGELOG.md](CHANGELOG.md).
 
 ![The ChordZimmer editor in the Night Studio theme](docs/editor.png)
@@ -37,7 +37,8 @@ ChordZimmer copies Klimper's *behaviour* only: no code, artwork, sounds, manual 
   usual follow-ups.
 - **Drag MIDI** (the timeline's title row): the selection, or everything, as a MIDI clip with
   the section names as markers. And the other way: **Import MIDI…** (beside it) opens a `.mid`
-  and puts its chords in at the insertion marker (its markers become sections); **Open .mid…**
+  and puts its chords in at the insertion marker (its markers become sections; drums on channel 10
+  are left out); **Open .mid…**
   on Match matches its melody. In the Standalone you can also drop the file on either. (In Live,
   use the buttons: Live keeps a clip's drag to itself, and hides the plug-in window while the
   Finder is in front, so drops don't reach it. Drag a clip to the desktop first to get a file.)

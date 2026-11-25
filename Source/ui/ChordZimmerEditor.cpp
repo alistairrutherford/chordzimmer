@@ -38,7 +38,7 @@ namespace chordzimmer
         const int savedScale = ui.getProperty (paletteScaleId, -1);
         nav.paletteScale = savedScale >= 0 && savedScale < numScales ? (Scale) savedScale : settings.scale;
         navigator.refresh();
-        palette.setContext ({ nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale });
+        palette.setContext ({ nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale, nav.distance() });
 
         const int snap = ui.getProperty (snapId, (int) defaultSnap);
         transport.setSnap ((Snap) juce::jlimit (0, (int) Snap::Bar, snap));
@@ -156,7 +156,7 @@ namespace chordzimmer
 
     void ChordZimmerEditor::paletteMoved()
     {
-        palette.setContext ({ nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale });
+        palette.setContext ({ nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale, nav.distance() });
         processor.uiState.setProperty (paletteFifthsId, nav.fifths, nullptr);
         processor.uiState.setProperty (paletteScaleId, (int) nav.paletteScale, nullptr);
     }
@@ -352,7 +352,7 @@ namespace chordzimmer
         performance.refresh (m);
         if (match.isVisible())
         {
-            match.refresh (m, { nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale });
+            match.refresh (m, { nav.paletteKey(), nav.paletteScale, nav.homeKey, nav.homeScale, nav.distance() });
             updateMatch();
         }
         outputKeys.refresh (m);

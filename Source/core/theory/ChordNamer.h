@@ -52,7 +52,9 @@ namespace chordzimmer
     // outside the scale take the spelling with the smaller accidental. On a tie, scales with a
     // major 3rd lower the tone above (Bb, Eb, Ab in C) except the #4 (F#), and scales with a minor
     // 3rd raise the tone below (G# in A minor) except the b2 (Bb in A minor).
-    inline Spelling makeSpelling (int key, Scale scale) noexcept
+    // `lean` breaks the tonic's tie instead when it isn't 0: below 0 flats, above 0 sharps (the
+    // key navigator passes its steps from home, so six fifths down from C reads Gb, not F#).
+    inline Spelling makeSpelling (int key, Scale scale, int lean = 0) noexcept
     {
         using namespace naming;
         key = ((key % 12) + 12) % 12;
@@ -73,7 +75,8 @@ namespace chordzimmer
                 else if (a == 2 || a == -2)
                     score += 10;
             }
-            const bool preferred = (wrap (key - naturalPc[L]) > 0) == (steps[2] == 4);
+            const bool sharp = wrap (key - naturalPc[L]) > 0;
+            const bool preferred = lean != 0 ? sharp == (lean > 0) : sharp == (steps[2] == 4);
             if (score < bestScore || (score == bestScore && preferred))
             {
                 bestScore = score;

@@ -50,6 +50,7 @@ namespace chordzimmer
         Scale paletteScale = Scale::Major;
         int homeKey = 0;
         Scale homeScale = Scale::Major;
+        int fifths = 0;                  // the palette key's steps from home: only its spelling's tie
     };
 
     constexpr int numPaletteColumns = 7;
@@ -239,7 +240,7 @@ namespace chordzimmer
     {
         PaletteGrid grid;
         grid.context = ctx;
-        const Spelling sp = makeSpelling (ctx.paletteKey, ctx.paletteScale);
+        const Spelling sp = makeSpelling (ctx.paletteKey, ctx.paletteScale, ctx.fifths);
 
         for (int v = 0; v < numTierVariants; ++v)
         {

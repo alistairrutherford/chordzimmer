@@ -164,7 +164,7 @@ namespace chordzimmer::ui
     {
         drawGlassPanel (g, getLocalBounds().toFloat(), 12.0f);
         // The palette's key and its steps from home, between ◀ and ▶.
-        const Spelling sp = makeSpelling (nav.paletteKey(), nav.paletteScale);
+        const Spelling sp = makeSpelling (nav.paletteKey(), nav.paletteScale, nav.distance());
         const int steps = nav.distance();
         auto r = keyLabel;
         g.setColour (nav.atHome() ? colours::text : night::accent);

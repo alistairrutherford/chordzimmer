@@ -106,11 +106,12 @@ namespace chordzimmer::ui
 
     void PalettePanel::setContext (const PaletteContext& c)
     {
-        if (c.paletteKey == context.paletteKey && c.paletteScale == context.paletteScale && c.homeKey == context.homeKey && c.homeScale == context.homeScale)
+        if (c.paletteKey == context.paletteKey && c.paletteScale == context.paletteScale && c.homeKey == context.homeKey && c.homeScale == context.homeScale
+            && c.fifths == context.fifths)
             return;
         context = c;
         grid = buildPalette (context);
-        spelling = makeSpelling (context.paletteKey, context.paletteScale);
+        spelling = makeSpelling (context.paletteKey, context.paletteScale, context.fifths);
         updateRelations();
         repaint();
     }
@@ -283,7 +284,9 @@ namespace chordzimmer::ui
         g.drawText ("PALETTE", title.withTrimmedLeft (4), juce::Justification::centredLeft);
         g.setFont (font (11.0f));
         const bool home = context.paletteKey == context.homeKey && context.paletteScale == context.homeScale;
-        const int steps = fifthsBetween (context.homeKey, context.paletteKey);
+        // The navigator's own steps (fifthsBetween would call six down "6 up": the tritone is +6).
+        const int steps = context.fifths != 0 || context.paletteKey == context.homeKey ? context.fifths
+                                                                                        : fifthsBetween (context.homeKey, context.paletteKey);
         g.setColour (home ? colours::dim : night::accent);
         const juce::String away = steps == 0 ? juce::String()
                                              : ", " + juce::String (std::abs (steps)) + (std::abs (steps) == 1 ? " fifth " : " fifths ") + (steps > 0 ? "up" : "down");

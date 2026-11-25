@@ -316,6 +316,23 @@ static void testInvariants()
     check (triadsFull, "the triad row is full in every mode of the major, harmonic-minor and melodic-minor families");
 }
 
+// The navigator's steps from home break the tonic's tie (the six-sharp/six-flat keys): walked
+// down from C the palette reads Gb, walked up F#; at home the old rule stays (PLAN.md §3.2).
+static void testFlatSideSpelling()
+{
+    check (makeSpelling (6, Scale::Major).name (6) == "F#", "F# major at home stays F#");
+    check (makeSpelling (6, Scale::Major, -6).name (6) == "Gb" && makeSpelling (6, Scale::Major, -6).name (11) == "Cb",
+           "six fifths down: Gb major, its 4th Cb");
+    check (makeSpelling (6, Scale::Major, 6).name (6) == "F#", "six fifths up: F#");
+    check (makeSpelling (3, Scale::NaturalMinor, 6).name (3) == "D#" && makeSpelling (3, Scale::NaturalMinor).name (3) == "Eb",
+           "Eb minor / D# minor: the lean wins only the tie");
+    check (makeSpelling (1, Scale::Major, 1).name (1) == "Db", "no tie, no change: Db major, not C#, whatever the lean");
+    PaletteContext down { 6, Scale::Major, 0, Scale::Major, -6 };
+    const auto g = buildPalette (down);
+    check (g.row ("triad")->cells[0].name == "Gb" && g.row ("triad")->cells[3].name == "Cb" && g.columns[0].rootName == "Gb",
+           "the palette six fifths down from C: Gb, Cb, header Gb (got " + g.row ("triad")->cells[0].name + ", " + g.row ("triad")->cells[3].name + ")");
+}
+
 int main()
 {
     testCMajor();
@@ -324,5 +341,6 @@ int main()
     testDDorian();
     testExoticModes();
     testInvariants();
+    testFlatSideSpelling();
     return testutil::finish ("test_palette");
 }

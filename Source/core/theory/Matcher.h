@@ -137,6 +137,7 @@ namespace chordzimmer
         {
             PaletteContext c = ctx;
             c.paletteKey = keyAtFifths (ctx.paletteKey, f);
+            c.fifths = ctx.fifths + f;
             const PaletteGrid grid = buildPalette (c);
             for (const auto& row : grid.rows)
                 for (const auto& cell : row.cells)

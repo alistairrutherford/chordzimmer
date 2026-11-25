@@ -26,6 +26,8 @@
 //            names so) start sections named after them; without markers, one section named
 //            after the file. A section holds at most maxSectionChords (then "Name 2" …), the
 //            progression maxProgressionChords (the rest are dropped and counted)
+//   drums    notes on MIDI channel 10 (General MIDI's drums) are left out before anything else,
+//            so a song's drum track doesn't make chords or melody; they're counted
 //   melody   the notes that aren't part of a chord, as a NoteSet for Match (beats each pitch
 //            class sounds; the bass is the lowest); a file with no notes outside its chords
 //            gives all of its notes
@@ -46,7 +48,7 @@ namespace chordzimmer
     {
         ChordProgression chords;          // empty if the file has no chords
         NoteSet melody;                   // empty if it has no notes
-        int numNotes = 0, melodyNotes = 0, droppedChords = 0;
+        int numNotes = 0, melodyNotes = 0, droppedChords = 0, drumNotes = 0;
         double beats = 0.0;               // the file's length (its last note's end)
         std::string error;                // why it couldn't be read ("" if it could)
 
@@ -56,6 +58,7 @@ namespace chordzimmer
     namespace midi_import_detail
     {
         struct Note { double start, end, seconds; int pitch; };
+        constexpr int drumChannel = 9;    // MIDI channel 10, counted from 0
 
         inline int pcCount (unsigned m) noexcept
         {
@@ -98,7 +101,10 @@ namespace chordzimmer
 
         std::vector<Note> notes;
         for (const auto& n : song.notes)
-            notes.push_back ({ (double) n.start / ppq, (double) std::max (n.end, n.start + 1) / ppq, (double) n.start / ppq * secondsPerBeat, n.pitch });
+            if ((n.channel & 15) == drumChannel)
+                ++out.drumNotes;
+            else
+                notes.push_back ({ (double) n.start / ppq, (double) std::max (n.end, n.start + 1) / ppq, (double) n.start / ppq * secondsPerBeat, n.pitch });
         std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.start != b.start ? a.start < b.start : a.pitch < b.pitch; });
         out.numNotes = (int) notes.size();
         for (const auto& n : notes)
