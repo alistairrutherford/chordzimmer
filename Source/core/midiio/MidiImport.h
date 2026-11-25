@@ -18,6 +18,15 @@
 //            dropped.
 //            Starts are rounded to a 1/16 grid from the first chord; every chord is at least a
 //            1/16 and at most 16 bars (a longer one is cut there).
+//   busy     a file that reads badly that way, a beat at a time instead (1.1): a busy arrangement
+//            (more than a third of 4+ chords shorter than a beat: passing and melody notes
+//            colouring each onset) or arpeggios (fewer than half the notes in chords, though 3+
+//            notes sound together somewhere). In each beat the pitch classes sounding a quarter
+//            of it or more make a chord; neighbouring beats of one family (root, and a minor,
+//            major or no 3rd) merge, named from the pitch classes sounding at least half as long
+//            as the strongest (the root and 3rd always), over the lowest note of the first beat.
+//            Block chords keep the onset reading: by the beat they'd lose a voicing or bass
+//            change and swallow a melody (found with Tools/import_report on real files)
 //   names    each chord is read by Detect.h's slotForHeard: ChordNamer over the bass, one of the
 //            chord types in root position where it is one, else the tones as played; a bass
 //            that's a chord tone is the inversion, one that isn't sits under the chord; the
@@ -45,6 +54,7 @@
 #include "../theory/Matcher.h"
 #include "MidiFile.h"
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <string>
@@ -52,12 +62,16 @@
 
 namespace chordzimmer
 {
+    // How the chords are read: Auto chooses (see "busy" at the top).
+    enum class ImportReading : uint8_t { Auto, AsPlayed, ByBeat };
+
     struct MidiImport
     {
         ChordProgression chords;          // empty if the file has no chords
         NoteSet melody;                   // empty if it has no notes
         int numNotes = 0, melodyNotes = 0, droppedChords = 0, drumNotes = 0;
         double beats = 0.0;               // the file's length (its last note's end)
+        bool byBeat = false;              // the chords were read a beat at a time
         std::string error;                // why it couldn't be read ("" if it could)
 
         bool ok() const noexcept { return error.empty(); }
@@ -151,11 +165,92 @@ namespace chordzimmer
             int lowest = 128;
             std::vector<size_t> notes;
         };
+
+        // The chords read `window` beats at a time (see "busy" at the top). A window without a
+        // chord, or where no note starts (a release ringing on), lengthens the one before.
+        inline std::vector<Group> windowChords (const std::vector<Note>& notes, double window)
+        {
+            double last = 0.0;
+            for (const auto& n : notes)
+                last = std::max (last, n.end);
+            const double from = std::floor (notes.front().start / window) * window;
+            const size_t count = (size_t) std::ceil ((last - from) / window - 1.0e-9);
+            std::vector<std::array<double, 128>> sounding (count, std::array<double, 128> {});
+            std::vector<int> onsets (count, 0);
+            for (const auto& n : notes)
+                ++onsets[std::min (count - 1, (size_t) std::max (0.0, std::floor ((n.start - from) / window)))];
+            for (const auto& n : notes)
+                for (size_t w = (size_t) std::max (0.0, std::floor ((n.start - from) / window)); w < count; ++w)
+                {
+                    const double w0 = from + (double) w * window, w1 = w0 + window;
+                    if (n.end <= w0)
+                        break;
+                    sounding[w][(size_t) n.pitch] += std::min (n.end, w1) - std::max (n.start, w0);
+                }
+
+            struct Span { size_t first = 0, last = 0; int family = -1; };
+            const Spelling plain = makeSpelling (0, Scale::Major);
+            std::vector<Span> spans;
+            for (size_t w = 0; w < count; ++w)
+            {
+                std::array<double, 12> pcs {};
+                for (int p = 0; p < 128; ++p)
+                    pcs[(size_t) (p % 12)] += sounding[w][(size_t) p];
+                unsigned mask = 0;
+                for (int pc = 0; pc < 12; ++pc)
+                    if (pcs[(size_t) pc] >= 0.25 * window)
+                        mask |= 1u << pc;
+                if (! countsAsChord (mask) || (onsets[w] == 0 && ! spans.empty()))
+                {
+                    if (! spans.empty())
+                        spans.back().last = w;
+                    continue;
+                }
+                int lowest = 0;
+                while (lowest < 127 && (sounding[w][(size_t) lowest] <= 0.0 || ((mask >> (lowest % 12)) & 1u) == 0))
+                    ++lowest;
+                const int root = nameChord (mask, lowest % 12, plain).root;
+                const int third = ((mask >> ((root + 3) % 12)) & 1u) != 0 ? 1 : ((mask >> ((root + 4) % 12)) & 1u) != 0 ? 2 : 0;
+                const int family = root * 3 + third;
+                if (! spans.empty() && spans.back().family == family)
+                    spans.back().last = w;
+                else
+                    spans.push_back ({ w, w, family });
+            }
+
+            std::vector<Group> out;
+            for (const auto& sp : spans)
+            {
+                std::array<double, 12> pcs {};
+                for (size_t w = sp.first; w <= sp.last; ++w)
+                    for (int p = 0; p < 128; ++p)
+                        pcs[(size_t) (p % 12)] += sounding[w][(size_t) p];
+                const double strongest = *std::max_element (pcs.begin(), pcs.end());
+                const int root = sp.family / 3, third = sp.family % 3;
+                unsigned mask = 1u << root;
+                if (third != 0)
+                    mask |= 1u << ((root + (third == 1 ? 3 : 4)) % 12);
+                for (int pc = 0; pc < 12; ++pc)
+                    if (pcs[(size_t) pc] >= 0.5 * strongest)
+                        mask |= 1u << pc;
+                int lowest = 0;
+                while (lowest < 127 && (sounding[sp.first][(size_t) lowest] <= 0.0 || ((mask >> (lowest % 12)) & 1u) == 0))
+                    ++lowest;
+                const double start = from + (double) sp.first * window;
+                Group g { start, from + (double) (sp.last + 1) * window, mask, lowest, {} };
+                if (! out.empty() && out.back().mask == g.mask && out.back().lowest % 12 == g.lowest % 12)
+                    out.back().end = g.end;
+                else
+                    out.push_back (g);
+            }
+            return out;
+        }
     }
 
     // The chords and melody of a read file. `key` and `scale` spell the names; `name` names the
     // section when the file has no markers.
-    inline MidiImport importMidi (const MidiSong& song, int key, Scale scale, const std::string& name)
+    inline MidiImport importMidi (const MidiSong& song, int key, Scale scale, const std::string& name,
+                                  ImportReading reading = ImportReading::Auto)
     {
         using namespace midi_import_detail;
         MidiImport out;
@@ -237,6 +332,38 @@ namespace chordzimmer
             chords.push_back (g);
         }
 
+        // Busy or arpeggiated: a beat at a time instead.
+        bool byBeat = reading == ImportReading::ByBeat;
+        if (reading == ImportReading::Auto)
+        {
+            int shortChords = 0;
+            for (size_t i = 0; i < chords.size(); ++i)
+                shortChords += (i + 1 < chords.size() ? chords[i + 1].start : chords[i].end) - chords[i].start < 1.0 - 1.0e-6 ? 1 : 0;
+            const bool busy = chords.size() >= 4 && shortChords * 3 > (int) chords.size();
+            const auto held = std::count (inChord.begin(), inChord.end(), true);
+            std::vector<std::pair<double, int>> edges;
+            for (const auto& n : notes)
+            {
+                edges.push_back ({ n.start, 1 });
+                edges.push_back ({ n.end, -1 });
+            }
+            std::sort (edges.begin(), edges.end());          // at one time, ends (-1) before starts
+            int sounding = 0, most = 0;
+            for (const auto& e : edges)
+                most = std::max (most, sounding += e.second);
+            const bool arpeggiated = held * 2 < (long) notes.size() && most >= 3;
+            byBeat = busy || arpeggiated;
+        }
+        if (byBeat)
+        {
+            auto beats = windowChords (notes, 1.0);
+            if (! beats.empty())
+            {
+                chords = std::move (beats);
+                out.byBeat = true;
+            }
+        }
+
         // The melody: the notes outside the chords (or all of them).
         for (size_t i = 0; i < notes.size(); ++i)
             inChord[i] = inChord[i] && ! topLine[i];
@@ -310,13 +437,26 @@ namespace chordzimmer
                 out.chords.sections.push_back (std::move (s));
             }
             const PatternSlot slot = slotForHeard (chords[i].mask, chords[i].lowest, key, scale, defaultSlotHalfBeats);
-            out.chords.sections.back().chords.push_back (makeProgressionChord (slot.chord, ticks, slot.inversion, slot.octave));
+            auto chord = makeProgressionChord (slot.chord, ticks, slot.inversion, slot.octave);
+            auto& list = out.chords.sections.back().chords;
+            if (! newSection && ! list.empty())
+            {
+                auto same = list.back();
+                same.ticks = chord.ticks;
+                if (same == chord && list.back().ticks + ticks <= maxChordTicks)
+                {
+                    list.back().ticks += ticks;  // two readings that name the same chord
+                    continue;
+                }
+            }
+            list.push_back (chord);
         }
         return out;
     }
 
     // From the file's bytes: an error (and nothing else) if it isn't a MIDI file this reads.
-    inline MidiImport importMidiFile (const uint8_t* data, size_t size, int key, Scale scale, const std::string& name)
+    inline MidiImport importMidiFile (const uint8_t* data, size_t size, int key, Scale scale, const std::string& name,
+                                      ImportReading reading = ImportReading::Auto)
     {
         MidiSong song;
         std::string error;
@@ -326,6 +466,6 @@ namespace chordzimmer
             out.error = error.empty() ? "not a MIDI file" : error;
             return out;
         }
-        return importMidi (song, key, scale, name);
+        return importMidi (song, key, scale, name, reading);
     }
 }

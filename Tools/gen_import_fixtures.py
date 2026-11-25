@@ -21,6 +21,8 @@ Run from anywhere:  python3 Tools/gen_import_fixtures.py
                       the clip ("Funk"), two bars of kick, snare and eighth hi-hats, each 1/8 beat
   live_band.mid       type 1, 96 ppq: a piano (C Am, a bar each) and a kit on channel 1 in a track
                       named "Beat", the hi-hats in 16ths a quarter beat long
+  busy_comp.mid       type 1, 96 ppq: a comp in eighths, C for a bar then Am, a passing note struck
+                      with every other stab (as played, 16 half-beat chords; by the beat, C Am)
   not_midi.mid        text, not a MIDI file
 """
 import os
@@ -161,6 +163,17 @@ write("live_band.mid", 1, ppq, [
     track([(0, meta(0x03, "Piano"))] + notes(ppq, [(0, 4, [48, 52, 55], 0), (4, 4, [45, 48, 52], 0)])),
     track([(0, meta(0x03, "Beat"))] + kit(ppq, 2, 0.25, 0.25)),
 ])
+
+# A busy comp: eighth-note stabs, every other one with a short passing note on top.
+ppq = 96
+spec = []
+for bar, (triad, colours) in enumerate([([48, 52, 55], [57, 62]), ([45, 48, 52], [55, 59])]):
+    for i in range(8):
+        t = bar * 4 + i * 0.5
+        spec.append((t, 0.45, triad, 0))
+        if i % 2 == 1:
+            spec.append((t, 0.2, [colours[0] if i % 4 == 1 else colours[1]], 0))
+write("busy_comp.mid", 1, ppq, [track([(0, tempo(120))]), track(notes(ppq, spec))])
 
 with open(os.path.join(OUT, "not_midi.mid"), "wb") as f:
     f.write(b"This is not a MIDI file.\n")

@@ -1142,7 +1142,8 @@ namespace chordzimmer::ui
         say (file.getFileName() + ": " + juce::String (imported.chords.numChords()) + " chords in "
              + juce::String (imported.chords.numSections()) + (imported.chords.numSections() == 1 ? " section" : " sections")
              + (imported.droppedChords > 0 ? ", " + juce::String (imported.droppedChords) + " left out (too many)" : juce::String())
-             + (imported.drumNotes > 0 ? "; the drums left out" : "") + ".");
+             + (imported.drumNotes > 0 ? "; the drums left out" : "")
+             + (imported.byBeat ? "; read a beat at a time (a busy arrangement or arpeggios)" : "") + ".");
         return true;
     }
 

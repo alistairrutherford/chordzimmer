@@ -234,10 +234,72 @@ static void testLimits()
            "a track named \"Percussion\" is drums");
 }
 
+static void testByBeat()
+{
+    std::cout << "== busy files, a beat at a time ==\n";
+    const auto song = [] (std::vector<MidiNote> notes)
+    {
+        MidiSong s;
+        s.ppq = 96;
+        s.notes = std::move (notes);
+        std::stable_sort (s.notes.begin(), s.notes.end(), [] (const MidiNote& a, const MidiNote& b) { return a.start < b.start; });
+        return s;
+    };
+    const auto note = [] (double start, double length, int pitch)
+    {
+        return MidiNote { (int64_t) std::llround (start * 96), (int64_t) std::llround ((start + length) * 96), (uint8_t) pitch, 90, 0 };
+    };
+
+    // A comp in eighths, a passing note struck with every other stab: C C6 C Cadd9 … as played.
+    std::vector<MidiNote> comp;
+    for (int bar = 0; bar < 2; ++bar)
+        for (int i = 0; i < 8; ++i)
+        {
+            const double t = bar * 4 + i * 0.5;
+            for (int k : bar == 0 ? std::vector<int> { 48, 52, 55 } : std::vector<int> { 45, 48, 52 })
+                comp.push_back (note (t, 0.45, k));
+            if (i % 2 == 1)
+                comp.push_back (note (t, 0.2, bar == 0 ? (i % 4 == 1 ? 57 : 62) : (i % 4 == 1 ? 55 : 59)));
+        }
+    const auto busy = song (comp);
+    const auto played = importMidi (busy, 0, Scale::Major, "Comp", ImportReading::AsPlayed);
+    check (played.chords.numChords() >= 8, "as played, the comp is " + std::to_string (played.chords.numChords()) + " chords of half a beat (" + layout (played.chords) + ")");
+    const auto auto1 = importMidi (busy, 0, Scale::Major, "Comp");
+    check (auto1.byBeat && layout (auto1.chords) == "Comp[C:4 Am:4]",
+           "busy (most chords under a beat): read by the beat, the passing notes left out: C Am (" + layout (auto1.chords) + ")");
+
+    // Arpeggios: each note held a beat, a new one every quarter beat (a harp, a pedal held).
+    std::vector<MidiNote> arp;
+    const int up[2][4] = { { 48, 52, 55, 60 }, { 45, 48, 52, 57 } };
+    for (int bar = 0; bar < 2; ++bar)
+        for (int i = 0; i < 16; ++i)
+            arp.push_back (note (bar * 4 + i * 0.25, 1.0, up[bar][i % 4]));
+    const auto arpeggios = importMidi (song (arp), 0, Scale::Major, "Harp");
+    // The last notes ring on to beat 8.75: no new chord there, the Am lasts to the release (5 beats).
+    check (arpeggios.byBeat && layout (arpeggios.chords) == "Harp[C:4 Am:5]",
+           "arpeggios (few notes in chords, several sounding): read by the beat: C Am, the release no chord of its own (" + layout (arpeggios.chords) + ")");
+
+    // A tune, one note at a time: no chords either way (two notes a fifth apart in a beat aren't one).
+    std::vector<MidiNote> tune;
+    const int line[] = { 67, 74, 71, 67, 72, 69, 74, 67 };
+    for (int i = 0; i < 8; ++i)
+        tune.push_back (note (i * 0.5, 0.5, line[i]));
+    const auto melody = importMidi (song (tune), 0, Scale::Major, "Tune");
+    check (melody.chords.empty() && ! melody.byBeat, "a tune, one note at a time: no chords, read as played");
+
+    const auto fixture = load ("busy_comp.mid");
+    check (fixture.byBeat && layout (fixture.chords) == "Imported[C:4 Am:4]", "busy_comp.mid (the same comp, written by the script): C Am, by the beat (" + layout (fixture.chords) + ")");
+
+    // Block chords stay as played: their voicing and bass changes, and a melody over them.
+    check (! load ("block_chords.mid").byBeat && ! load ("chords_melody.mid").byBeat && ! load ("inversions.mid").byBeat,
+           "block chords (with or without a melody, inversions) are read as played");
+}
+
 int main()
 {
     testFixtures();
     testRoundTrip();
     testLimits();
+    testByBeat();
     return testutil::finish ("test_import");
 }

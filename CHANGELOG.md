@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0 (2026-11-25): MIDI import on real files
+
+Found by running 71 real files through the import (`Tools/import_report.cpp`): Ableton's
+Expressive Chords pack, exported clips from Live, and multi-track songs.
+
+- **Drum parts are found on any channel.** Live exports every clip on channel 1 and names the
+  track after the clip, so 1.0 turned a drum clip into dozens of tiny chords (F#5, D7b5 …). A
+  part is drums when it's on channel 10, its track is named drum… or perc…, or it plays like a
+  kit (short notes, mostly on the kick-to-ride keys, a hi-hat with a kick or snare, or kick and
+  snare struck together). The Info View says when a file is all drums.
+- **Busy files are read a beat at a time.** In a full arrangement every arpeggio or melody note
+  started a new chord (a 13-track song gave 440 half-beat chords, 184 of them dropped at the
+  256 limit); arpeggios gave almost none. Now, when most chords would be shorter than a beat,
+  or most notes fall outside chords while several sound together, the chords are read from
+  what sounds in each beat, neighbouring beats of one chord merged, passing notes left out:
+  the same song reads Am Bm C6 D6 | Cmaj7 D Em … in 147 chords. Block chords keep the onset
+  reading, which keeps their voicing and bass changes. The Info View says which was used.
+- Neighbouring chords that come out the same merge into one.
+- `Tools/import_report.cpp`: what the import makes of any `.mid` files, to judge it on real
+  material; fixtures `live_drums.mid`, `live_band.mid` and `busy_comp.mid`.
+
 ## 1.0.0 (2026-11-25)
 
 The first release: every phase of PLAN.md §6 (0–9), checked in Ableton Live 12. The phases

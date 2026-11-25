@@ -8,6 +8,8 @@
 //
 // --key: the home key (0 = C … 11); --minor: natural minor (else major). They spell the names and
 // set the palette Match ranks.
+// --played / --by-beat: read the chords as played, or a beat at a time (default: the import's own
+// choice; the report says when it read by the beat).
 // --onsets: how many of the file's onset groups to list (default 12; 0 for none).
 #include "core/midiio/MidiImport.h"
 #include "core/model/TimelineLayout.h"
@@ -35,7 +37,7 @@ namespace
         return buf;
     }
 
-    void report (const std::string& path, int key, Scale scale, int onsets)
+    void report (const std::string& path, int key, Scale scale, int onsets, ImportReading reading)
     {
         std::ifstream in (path, std::ios::binary);
         const std::vector<uint8_t> bytes ((std::istreambuf_iterator<char> (in)), {});
@@ -43,7 +45,7 @@ namespace
         const std::string file = slash == std::string::npos ? path : path.substr (slash + 1);
         std::printf ("== %s\n", file.c_str());
 
-        const auto r = importMidiFile (bytes.data(), bytes.size(), key, scale, "Imported");
+        const auto r = importMidiFile (bytes.data(), bytes.size(), key, scale, "Imported", reading);
         if (! r.ok())
         {
             std::printf ("   error: %s\n\n", r.error.c_str());
@@ -52,9 +54,9 @@ namespace
         MidiSong song;
         std::string error;
         readMidiFile (bytes.data(), bytes.size(), song, error);
-        std::printf ("   %d notes (+%d drums), %g BPM, %d/%d, %d ppq; %d chords, %d sections, %d dropped; melody %d notes\n",
+        std::printf ("   %d notes (+%d drums), %g BPM, %d/%d, %d ppq; %d chords, %d sections, %d dropped; melody %d notes%s\n",
                      r.numNotes, r.drumNotes, song.bpm, song.numerator, song.denominator, song.ppq,
-                     r.chords.numChords(), r.chords.numSections(), r.droppedChords, r.melodyNotes);
+                     r.chords.numChords(), r.chords.numSections(), r.droppedChords, r.melodyNotes, r.byBeat ? "; read by the beat" : "");
 
         for (const auto& sec : r.chords.sections)
         {
@@ -107,16 +109,21 @@ int main (int argc, char** argv)
 {
     int key = 0, onsets = 12;
     Scale scale = Scale::Major;
+    ImportReading reading = ImportReading::Auto;
     for (int i = 1; i < argc; ++i)
     {
         if (std::strcmp (argv[i], "--key") == 0 && i + 1 < argc)
             key = std::atoi (argv[++i]);
+        else if (std::strcmp (argv[i], "--played") == 0)
+            reading = ImportReading::AsPlayed;
+        else if (std::strcmp (argv[i], "--by-beat") == 0)
+            reading = ImportReading::ByBeat;
         else if (std::strcmp (argv[i], "--minor") == 0)
             scale = Scale::NaturalMinor;
         else if (std::strcmp (argv[i], "--onsets") == 0 && i + 1 < argc)
             onsets = std::atoi (argv[++i]);
         else
-            report (argv[i], key, scale, onsets);
+            report (argv[i], key, scale, onsets, reading);
     }
     return 0;
 }

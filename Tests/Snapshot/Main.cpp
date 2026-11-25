@@ -1499,6 +1499,16 @@ static void testImport()
                && editor->infoView().shownText().contains ("has no chords"),
            "melody_only.mid on the timeline: no chords, nothing changes, a hint to drop it on Match");
     check (! t.importFile (dir.getChildFile ("not_midi.mid"), end) && editor->infoView().shownText().contains ("not a MIDI file"), "a text file: says so");
+    // 1.1: drums on channel 1 (as Live exports a clip) and a busy comp, read a beat at a time.
+    check (! t.importFile (dir.getChildFile ("live_drums.mid"), end) && editor->infoView().shownText().contains ("is all drums"),
+           "live_drums.mid: nothing changes, the Info View says it's all drums");
+    editor->refreshNow();
+    const float pastAll = t.tabBounds (p->getProgression().numSections() - 1).getRight() + 40.0f;
+    check (t.importFile (dir.getChildFile ("busy_comp.mid"), pastAll) && layout (p->getProgression()).endsWith ("busy_comp[C:4 Am:4]")
+               && editor->infoView().shownText().contains ("read a beat at a time"),
+           "busy_comp.mid: C Am, the Info View saying it was read a beat at a time (" + layout (p->getProgression()).fromLastOccurrenceOf ("] ", false, false) + "; " + editor->infoView().shownText() + ")");
+    p->undoProgression();
+    editor->refreshNow();
 
     // On Match: the melody is the note set.
     editor->showMatch (true);
