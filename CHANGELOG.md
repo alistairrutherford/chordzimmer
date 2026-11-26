@@ -2,6 +2,9 @@
 
 ## 1.2.1 (2026-11-25)
 
+The first version published as a GitHub release, as a universal macOS zip (signed ad hoc, not
+notarized).
+
 - **The chord playing stands out on the palette:** its button grows a little, with an amber ring
   and an amber glow behind it, steady between beats (so a keyboard's chord shows as clearly as
   the timeline's) and brighter on each beat. Before, only its own glow and a faint wash pulsed.
